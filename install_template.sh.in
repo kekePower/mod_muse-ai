@@ -1,0 +1,29 @@
+#!/bin/bash
+set -e
+
+APXS="@APXS@"
+MODULE_SO="@MODULE_SO@"
+APACHE_LIBEXEC="@APACHE_LIBEXEC@"
+
+echo "Installing mod_muse_ai.so to Apache modules directory..."
+
+# Copy the module to Apache's module directory
+sudo cp "$MODULE_SO" "$APACHE_LIBEXEC/"
+
+echo "Module installed successfully!"
+echo ""
+echo "To enable the module, add the following to your Apache configuration:"
+echo "LoadModule muse_ai_module modules/mod_muse_ai.so"
+echo ""
+echo "Example configuration:"
+echo "<Files \"ai\">"
+echo "    SetHandler AI"
+echo "</Files>"
+echo ""
+echo "Or map by extension:"
+echo "AddHandler AI .ai"
+echo ""
+echo "Configuration directives:"
+echo "MuseAiEndpoint http://127.0.0.1:8080  # MuseWeb server URL"
+echo "MuseAiTimeout 300                     # Request timeout in seconds"
+echo "MuseAiDebug On                        # Enable debug logging"

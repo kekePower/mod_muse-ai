@@ -1,0 +1,27 @@
+# Build artifacts
+build/
+.libs/
+*.o
+*.lo
+*.la
+*.slo
+*.so
+
+# Apache module build files
+.deps/
+.dirstamp
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
