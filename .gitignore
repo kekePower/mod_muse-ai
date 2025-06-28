@@ -1,6 +1,7 @@
 # Build artifacts
 build/
 .libs/
+src/.libs/
 *.o
 *.lo
 *.la

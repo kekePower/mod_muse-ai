@@ -31,7 +31,7 @@ message('Apache include arguments: ' + ' '.join(apache_include_args))
 message('Apache module directory: ' + apache_libexec)
 
 # Define the module source
-mod_sources = files('mod_muse_ai.c')
+mod_sources = files('src/mod_muse_ai.c')
 
 # Custom target to build the module using apxs
 mod_muse_ai = custom_target('mod_muse_ai.so',

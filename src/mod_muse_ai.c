@@ -26,7 +26,7 @@ typedef struct {
 } muse_ai_config;
 
 /* Default configuration values */
-#define DEFAULT_ENDPOINT "http://127.0.0.1:8080"
+#define DEFAULT_ENDPOINT "http://127.0.0.1:11434/v1"
 #define MUSE_AI_DEFAULT_TIMEOUT 300
 #define DEFAULT_DEBUG 0
 #define DEFAULT_MODEL "default"
@@ -47,7 +47,7 @@ module AP_MODULE_DECLARE_DATA muse_ai_module;
 /* Configuration directives */
 static const command_rec muse_ai_cmds[] = {
     AP_INIT_TAKE1("MuseAiEndpoint", set_muse_ai_endpoint, NULL, RSRC_CONF,
-                  "MuseWeb server URL (default: http://127.0.0.1:8080)"),
+                  "MuseWeb server URL (default: http://127.0.0.1:11434/v1)"),
     AP_INIT_TAKE1("MuseAiTimeout", set_muse_ai_timeout, NULL, RSRC_CONF,
                   "Request timeout in seconds (default: 300)"),
     AP_INIT_FLAG("MuseAiDebug", set_muse_ai_debug, NULL, RSRC_CONF,
