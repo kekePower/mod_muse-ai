@@ -30,21 +30,24 @@ apache_include_args += '-I' + apache_includes
 message('Apache include arguments: ' + ' '.join(apache_include_args))
 message('Apache module directory: ' + apache_libexec)
 
-# Define the module source
-mod_sources = files('src/mod_muse_ai.c')
+# Define all source files
+source_files = [
+    'src/mod_muse_ai_main.c',
+    'src/streaming.c',
+    'src/sanitize.c', 
+    'src/http_client.c',
+    'src/utils.c'
+]
 
-# Custom target to build the module using apxs
-mod_muse_ai = custom_target('mod_muse_ai.so',
-  input : mod_sources,
-  output : 'mod_muse_ai.so',
-  command : [
-    meson.current_source_dir() / 'build_module.sh',
-    '@INPUT@',
-    '@OUTPUT@',
-    apxs.full_path()
-  ],
-  build_by_default : true,
-  install : false  # We'll handle installation separately
+# Custom target to build the Apache module
+mod_muse_ai_so = custom_target('mod_muse_ai.so',
+    output: 'mod_muse_ai.so',
+    command: [
+        meson.current_source_dir() / 'scripts' / 'build_modular.sh',
+        '@OUTDIR@',
+        apxs.full_path()
+    ],
+    build_by_default: true
 )
 
 # Custom install target
@@ -62,7 +65,7 @@ install_script_file = configure_file(
 # Make the script executable and create install target
 run_target('install-module',
   command : ['bash', meson.current_build_dir() / 'install_module.sh'],
-  depends : mod_muse_ai
+  depends : mod_muse_ai_so
 )
 
 # Development targets

@@ -26,6 +26,7 @@ typedef struct {
     int debug;          /* Debug flag */
     char *model;        /* AI model to use */
     char *api_key;      /* API key for authentication */
+    int streaming;      /* Enable streaming responses */
 } muse_ai_config;
 
 /* Default configuration values */
@@ -33,6 +34,7 @@ typedef struct {
 #define MUSE_AI_DEFAULT_TIMEOUT 300
 #define DEFAULT_DEBUG 0
 #define DEFAULT_MODEL "default"
+#define DEFAULT_STREAMING 1  /* Enable streaming by default */
 
 /* Forward declarations */
 static int muse_ai_handler(request_rec *r);
@@ -43,6 +45,7 @@ static const char *set_muse_ai_timeout(cmd_parms *cmd, void *cfg, const char *ar
 static const char *set_muse_ai_debug(cmd_parms *cmd, void *cfg, int flag);
 static const char *set_muse_ai_model(cmd_parms *cmd, void *cfg, const char *arg);
 static const char *set_muse_ai_api_key(cmd_parms *cmd, void *cfg, const char *arg);
+static const char *set_muse_ai_streaming(cmd_parms *cmd, void *cfg, int flag);
 static int forward_to_museweb(request_rec *r, muse_ai_config *cfg);
 
 /* Module declaration - must be declared before use in config functions */
@@ -60,6 +63,8 @@ static const command_rec muse_ai_cmds[] = {
                   "AI model to use (default: default)"),
     AP_INIT_TAKE1("MuseAiApiKey", set_muse_ai_api_key, NULL, RSRC_CONF,
                   "API key for authentication (optional)"),
+    AP_INIT_FLAG("MuseAiStreaming", set_muse_ai_streaming, NULL, RSRC_CONF,
+                 "Enable streaming responses (default: On)"),
     {NULL}
 };
 
@@ -72,6 +77,7 @@ static void *create_muse_ai_config(apr_pool_t *p, server_rec *s)
     cfg->debug = DEFAULT_DEBUG;
     cfg->model = DEFAULT_MODEL;
     cfg->api_key = NULL;  /* No API key by default */
+    cfg->streaming = DEFAULT_STREAMING;
     return cfg;
 }
 
@@ -115,6 +121,13 @@ static const char *set_muse_ai_api_key(cmd_parms *cmd, void *cfg, const char *ar
     } else {
         conf->api_key = NULL;
     }
+    return NULL;
+}
+
+static const char *set_muse_ai_streaming(cmd_parms *cmd, void *cfg, int flag)
+{
+    muse_ai_config *conf = (muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
+    conf->streaming = flag;
     return NULL;
 }
 
@@ -175,6 +188,7 @@ static int muse_ai_handler(request_rec *r)
         ap_rprintf(r, "<p><strong>AI Model:</strong> %s</p>\n", cfg->model ? cfg->model : "default");
         ap_rprintf(r, "<p><strong>API Key:</strong> %s</p>\n", 
                    cfg->api_key ? "Configured (hidden for security)" : "Not configured");
+        ap_rprintf(r, "<p><strong>Streaming:</strong> %s</p>\n", cfg->streaming ? "Enabled" : "Disabled");
     } else {
         ap_rputs("<p><em>Configuration not available (using defaults)</em></p>\n", r);
     }
@@ -463,10 +477,11 @@ static int forward_to_museweb(request_rec *r, muse_ai_config *cfg)
         "  \"messages\": [\n"
         "    {\"role\": \"user\", \"content\": \"%s\"}\n"
         "  ],\n"
-        "  \"stream\": false\n"
+        "  \"stream\": %s\n"
         "}",
         cfg->model ? cfg->model : "default",
-        escaped_content);
+        escaped_content,
+        cfg->streaming ? "true" : "false");
     
     if (cfg->debug) {
         ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
