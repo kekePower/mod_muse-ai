@@ -13,20 +13,31 @@ echo "APXS: $APXS"
 # Remember the original working directory
 ORIGINAL_DIR=$(pwd)
 
-# Get the directory of the source file
+# Get the directory of the source file and output
 SOURCE_DIR=$(dirname "$SOURCE")
 SOURCE_FILE=$(basename "$SOURCE")
+OUTPUT_DIR=$(dirname "$OUTPUT")
+OUTPUT_FILE=$(basename "$OUTPUT")
 
-# Make OUTPUT path absolute if it's relative
+# Make paths absolute if they're relative
+if [[ "$SOURCE" != /* ]]; then
+    SOURCE="$ORIGINAL_DIR/$SOURCE"
+fi
 if [[ "$OUTPUT" != /* ]]; then
     OUTPUT="$ORIGINAL_DIR/$OUTPUT"
 fi
 
-# Change to source directory to run apxs
-cd "$SOURCE_DIR"
+# Create output directory if it doesn't exist
+mkdir -p "$OUTPUT_DIR"
+
+# Change to output directory to run apxs (keeps artifacts there)
+cd "$OUTPUT_DIR"
+
+# Copy source file to build directory temporarily
+cp "$SOURCE" "./$(basename "$SOURCE")"
 
 # Run apxs to build the module
-"$APXS" -c "$SOURCE_FILE"
+"$APXS" -c "$(basename "$SOURCE")"
 
 # Copy the resulting .so file to the expected location
 if [ -f ".libs/mod_muse_ai.so" ]; then
