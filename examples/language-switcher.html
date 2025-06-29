@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Language Switcher Widget</title>
+    <style>
+        .language-switcher {
+            position: relative;
+            display: inline-block;
+            font-family: Arial, sans-serif;
+        }
+        
+        .language-button {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 120px;
+        }
+        
+        .language-button:hover {
+            background: #e9ecef;
+        }
+        
+        .flag {
+            width: 20px;
+            height: 15px;
+            display: inline-block;
+            background-size: cover;
+            border-radius: 2px;
+        }
+        
+        .dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: none;
+            z-index: 1000;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .dropdown.show {
+            display: block;
+        }
+        
+        .language-option {
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid #f8f9fa;
+        }
+        
+        .language-option:hover {
+            background: #f8f9fa;
+        }
+        
+        .language-option:last-child {
+            border-bottom: none;
+        }
+        
+        .tier-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            color: white;
+            margin-left: auto;
+        }
+        
+        .tier-1 { background: #28a745; }
+        .tier-2 { background: #ffc107; color: #212529; }
+        .tier-3 { background: #6c757d; }
+    </style>
+</head>
+<body>
+    <h1>mod_muse-ai Language Switcher</h1>
+    <p>This widget demonstrates how to implement language switching for the mod_muse-ai translation system.</p>
+    
+    <div class="language-switcher" id="languageSwitcher">
+        <div class="language-button" onclick="toggleDropdown()">
+            <span class="flag" id="currentFlag">🇺🇸</span>
+            <span id="currentLanguage">English (US)</span>
+            <span>▼</span>
+        </div>
+        <div class="dropdown" id="languageDropdown">
+            <!-- Languages will be populated by JavaScript -->
+        </div>
+    </div>
+    
+    <script>
+        // Language data with flags and tiers
+        const languages = [
+            // Tier 1 (High Quality)
+            { code: 'en_US', name: 'English (US)', flag: '🇺🇸', tier: 1 },
+            { code: 'en_GB', name: 'English (UK)', flag: '🇬🇧', tier: 1 },
+            { code: 'de_DE', name: 'German', flag: '🇩🇪', tier: 1 },
+            { code: 'es_ES', name: 'Spanish (Spain)', flag: '🇪🇸', tier: 1 },
+            { code: 'es_MX', name: 'Spanish (Mexico)', flag: '🇲🇽', tier: 1 },
+            { code: 'fr_FR', name: 'French', flag: '🇫🇷', tier: 1 },
+            { code: 'it_IT', name: 'Italian', flag: '🇮🇹', tier: 1 },
+            { code: 'ja_JP', name: 'Japanese', flag: '🇯🇵', tier: 1 },
+            { code: 'pt_BR', name: 'Portuguese (Brazil)', flag: '🇧🇷', tier: 1 },
+            { code: 'pt_PT', name: 'Portuguese (Portugal)', flag: '🇵🇹', tier: 1 },
+            { code: 'zh_CN', name: 'Chinese (Simplified)', flag: '🇨🇳', tier: 1 },
+            { code: 'zh_TW', name: 'Chinese (Traditional)', flag: '🇹🇼', tier: 1 },
+            
+            // Tier 2 (Good Quality)
+            { code: 'ar_SA', name: 'Arabic', flag: '🇸🇦', tier: 2 },
+            { code: 'bn_BD', name: 'Bengali', flag: '🇧🇩', tier: 2 },
+            { code: 'cs_CZ', name: 'Czech', flag: '🇨🇿', tier: 2 },
+            { code: 'da_DK', name: 'Danish', flag: '🇩🇰', tier: 2 },
+            { code: 'el_GR', name: 'Greek', flag: '🇬🇷', tier: 2 },
+            { code: 'fi_FI', name: 'Finnish', flag: '🇫🇮', tier: 2 },
+            { code: 'he_IL', name: 'Hebrew', flag: '🇮🇱', tier: 2 },
+            { code: 'hi_IN', name: 'Hindi', flag: '🇮🇳', tier: 2 },
+            { code: 'hu_HU', name: 'Hungarian', flag: '🇭🇺', tier: 2 },
+            { code: 'ko_KR', name: 'Korean', flag: '🇰🇷', tier: 2 },
+            { code: 'nb_NO', name: 'Norwegian', flag: '🇳🇴', tier: 2 },
+            { code: 'pl_PL', name: 'Polish', flag: '🇵🇱', tier: 2 },
+            { code: 'ru_RU', name: 'Russian', flag: '🇷🇺', tier: 2 },
+            { code: 'sv_SE', name: 'Swedish', flag: '🇸🇪', tier: 2 },
+            { code: 'th_TH', name: 'Thai', flag: '🇹🇭', tier: 2 },
+            { code: 'tr_TR', name: 'Turkish', flag: '🇹🇷', tier: 2 },
+            { code: 'uk_UA', name: 'Ukrainian', flag: '🇺🇦', tier: 2 },
+            { code: 'vi_VN', name: 'Vietnamese', flag: '🇻🇳', tier: 2 },
+            
+            // Tier 3 (Functional)
+            { code: 'bg_BG', name: 'Bulgarian', flag: '🇧🇬', tier: 3 },
+            { code: 'ca_ES', name: 'Catalan', flag: '🏴', tier: 3 },
+            { code: 'hr_HR', name: 'Croatian', flag: '🇭🇷', tier: 3 },
+            { code: 'nl_NL', name: 'Dutch', flag: '🇳🇱', tier: 3 },
+            { code: 'et_EE', name: 'Estonian', flag: '🇪🇪', tier: 3 },
+            { code: 'lv_LV', name: 'Latvian', flag: '🇱🇻', tier: 3 },
+            { code: 'lt_LT', name: 'Lithuanian', flag: '🇱🇹', tier: 3 },
+            { code: 'ro_RO', name: 'Romanian', flag: '🇷🇴', tier: 3 },
+            { code: 'sk_SK', name: 'Slovak', flag: '🇸🇰', tier: 3 },
+            { code: 'sl_SI', name: 'Slovenian', flag: '🇸🇮', tier: 3 }
+        ];
+        
+        function getTierName(tier) {
+            switch(tier) {
+                case 1: return 'High';
+                case 2: return 'Good';
+                case 3: return 'Functional';
+                default: return '';
+            }
+        }
+        
+        function getTierClass(tier) {
+            return `tier-${tier}`;
+        }
+        
+        function populateDropdown() {
+            const dropdown = document.getElementById('languageDropdown');
+            dropdown.innerHTML = '';
+            
+            languages.forEach(lang => {
+                const option = document.createElement('div');
+                option.className = 'language-option';
+                option.onclick = () => selectLanguage(lang);
+                
+                option.innerHTML = `
+                    <span class="flag">${lang.flag}</span>
+                    <span>${lang.name}</span>
+                    <span class="tier-badge ${getTierClass(lang.tier)}">${getTierName(lang.tier)}</span>
+                `;
+                
+                dropdown.appendChild(option);
+            });
+        }
+        
+        function selectLanguage(language) {
+            // Update current selection
+            document.getElementById('currentFlag').textContent = language.flag;
+            document.getElementById('currentLanguage').textContent = language.name;
+            
+            // Hide dropdown
+            document.getElementById('languageDropdown').classList.remove('show');
+            
+            // Get current page path
+            const currentPath = window.location.pathname;
+            const currentSearch = window.location.search;
+            
+            // Extract language code (2-3 characters)
+            const langCode = language.code.split('_')[0];
+            
+            // Method 1: URL prefix (if supported)
+            if (currentPath.match(/^\/[a-z]{2,3}\//)) {
+                // Replace existing language prefix
+                const newPath = currentPath.replace(/^\/[a-z]{2,3}\//, `/${langCode}/`);
+                window.location.href = newPath + currentSearch;
+            } else if (currentPath === '/' || currentPath.match(/\/[^\/]*\.ai$/)) {
+                // Add language prefix
+                const newPath = `/${langCode}${currentPath}`;
+                window.location.href = newPath + currentSearch;
+            } else {
+                // Method 2: Query parameter fallback
+                const url = new URL(window.location);
+                url.searchParams.set('lang', langCode);
+                window.location.href = url.toString();
+            }
+        }
+        
+        function toggleDropdown() {
+            const dropdown = document.getElementById('languageDropdown');
+            dropdown.classList.toggle('show');
+        }
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const switcher = document.getElementById('languageSwitcher');
+            if (!switcher.contains(event.target)) {
+                document.getElementById('languageDropdown').classList.remove('show');
+            }
+        });
+        
+        // Detect current language and update display
+        function detectCurrentLanguage() {
+            const path = window.location.pathname;
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            let currentLangCode = null;
+            
+            // Check URL prefix
+            const pathMatch = path.match(/^\/([a-z]{2,3})\//);
+            if (pathMatch) {
+                currentLangCode = pathMatch[1];
+            }
+            
+            // Check query parameters
+            if (!currentLangCode) {
+                currentLangCode = urlParams.get('lang') || urlParams.get('language') || urlParams.get('locale');
+                if (currentLangCode && currentLangCode.includes('_')) {
+                    currentLangCode = currentLangCode.split('_')[0];
+                }
+            }
+            
+            // Find matching language
+            if (currentLangCode) {
+                const currentLang = languages.find(lang => 
+                    lang.code.startsWith(currentLangCode + '_') || 
+                    lang.code === currentLangCode
+                );
+                
+                if (currentLang) {
+                    document.getElementById('currentFlag').textContent = currentLang.flag;
+                    document.getElementById('currentLanguage').textContent = currentLang.name;
+                }
+            }
+        }
+        
+        // Initialize
+        populateDropdown();
+        detectCurrentLanguage();
+    </script>
+    
+    <h2>Usage Instructions</h2>
+    <p>To integrate this language switcher into your mod_muse-ai site:</p>
+    
+    <ol>
+        <li><strong>Copy the HTML/CSS/JS</strong> into your page template</li>
+        <li><strong>Configure URL rewriting</strong> in Apache (see examples/translation-config.conf)</li>
+        <li><strong>Customize the styling</strong> to match your site design</li>
+        <li><strong>Test the language switching</strong> functionality</li>
+    </ol>
+    
+    <h3>Features</h3>
+    <ul>
+        <li>Visual quality indicators (Tier 1/2/3 badges)</li>
+        <li>Flag icons for easy recognition</li>
+        <li>Automatic current language detection</li>
+        <li>Support for both URL prefix and query parameter methods</li>
+        <li>Responsive dropdown design</li>
+        <li>Click-outside-to-close functionality</li>
+    </ul>
+    
+    <h3>Customization</h3>
+    <p>You can customize:</p>
+    <ul>
+        <li>Flag emojis or replace with actual flag images</li>
+        <li>Color scheme and styling</li>
+        <li>Language list (remove unsupported languages)</li>
+        <li>Tier display (hide tiers if not needed)</li>
+        <li>Redirect behavior (URL prefix vs query parameters)</li>
+    </ul>
+</body>
+</html>

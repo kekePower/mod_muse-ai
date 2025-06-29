@@ -3,9 +3,13 @@
 #include "http_protocol.h"
 #include "connection_pool.h"
 #include "advanced_config.h"
+#include "language_selection.h"
+#include "supported_locales.h"
+#include "error_pages.h"
 #include <apr_time.h>
 #include "cJSON.h"
 #include "http_core.h"
+#include <ctype.h>
 
 /* Forward declarations for metrics functions */
 int init_metrics_system(apr_pool_t *pool, server_rec *s);
@@ -15,6 +19,8 @@ char *generate_json_metrics(apr_pool_t *pool);
 
 /* Forward declaration for the main module structure */
 extern module AP_MODULE_DECLARE_DATA muse_ai_module;
+
+/* Language error handling is now handled by error_pages.c */
 
 /* Phase 3 integration functions */
 
@@ -103,6 +109,34 @@ int ai_file_handler(request_rec *r)
         return HTTP_INTERNAL_SERVER_ERROR;
     }
     
+    /* Detect language for translation */
+    muse_language_selection_t *lang_selection = muse_detect_language(r, "en_US");
+    
+    /* Check for language errors and provide helpful error pages */
+    if (lang_selection && lang_selection->is_translation_requested && !lang_selection->is_supported) {
+        return generate_language_error_page(r, lang_selection);
+    }
+    
+    if (lang_selection) {
+        ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, 
+                     "[mod_muse_ai] Language detection: locale=%s, source=%s, translation_requested=%s",
+                     lang_selection->selected_locale ? lang_selection->selected_locale : "NULL",
+                     lang_selection->source ? lang_selection->source : "unknown",
+                     lang_selection->is_translation_requested ? "yes" : "no");
+        
+        /* Update request URI if language prefix was detected */
+        if (lang_selection->processed_uri && strcmp(r->uri, lang_selection->processed_uri) != 0) {
+            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                         "[mod_muse_ai] URI updated from %s to %s", r->uri, lang_selection->processed_uri);
+            r->uri = apr_pstrdup(r->pool, lang_selection->processed_uri);
+        }
+        
+        /* Set language preference cookie if translation was explicitly requested */
+        if (lang_selection->is_translation_requested && lang_selection->selected_locale) {
+            muse_set_language_cookie(r, lang_selection->selected_locale, 86400); /* 24 hours */
+        }
+    }
+    
     /* Construct path to .ai file using Apache's filename translation */
     /* Apache translates URIs to filenames automatically in r->filename */
     ai_file_path = r->filename;
@@ -152,10 +186,68 @@ int ai_file_handler(request_rec *r)
         }
     }
     
-    /* Create JSON payload */
+    /* Create JSON payload with translation support */
     if (final_system_prompt) {
         /* Both system and user content */
-        char *escaped_system = escape_json_string(r->pool, final_system_prompt);
+        char *enhanced_system_prompt = final_system_prompt;
+        
+        /* Add translation instructions if needed */
+        if (lang_selection && lang_selection->is_translation_requested && 
+            lang_selection->selected_locale && lang_selection->is_supported) {
+            
+            const char *display_name = muse_get_locale_display_name(lang_selection->selected_locale);
+            const char *tier = muse_get_locale_tier(lang_selection->selected_locale);
+            
+            /* Convert locale to URL-friendly format for URL prefixes */
+            char url_lang_buffer[16];
+            const char *url_lang_code = "en"; /* default */
+            
+            /* Convert es_MX -> es-mx, zh_CN -> zh-cn, etc. */
+            if (lang_selection->selected_locale) {
+                strncpy(url_lang_buffer, lang_selection->selected_locale, sizeof(url_lang_buffer) - 1);
+                url_lang_buffer[sizeof(url_lang_buffer) - 1] = '\0';
+                
+                /* Convert to lowercase and replace _ with - */
+                for (char *p = url_lang_buffer; *p; p++) {
+                    if (*p == '_') {
+                        *p = '-';
+                    } else {
+                        *p = tolower(*p);
+                    }
+                }
+                url_lang_code = url_lang_buffer;
+            }
+            
+            enhanced_system_prompt = apr_psprintf(r->pool,
+                "%s\n\n"
+                "**TRANSLATION INSTRUCTIONS:**\n"
+                "- Translate the final output to %s (%s)\n"
+                "- Translation quality tier: %s\n"
+                "- Maintain the original meaning, tone, and formatting\n"
+                "- Preserve any HTML tags, markdown, or special formatting\n"
+                "- Use natural, fluent language appropriate for the target locale\n"
+                "- If technical terms don't translate well, keep them in English with brief explanation\n"
+                "\n"
+                "**CRITICAL URL LOCALIZATION REQUIREMENT:**\n"
+                "- MUST update navigation links in <nav> to include language prefix '/%s/'\n"
+                "- REQUIRED changes: href=\"/\" becomes href=\"/%s/\", href=\"/features\" becomes href=\"/%s/features\"\n"
+                "- NEVER modify: CSS links (/css/), JavaScript (/js/), images, or external URLs\n"
+                "- Example: <a href=\"/\">Home</a> must become <a href=\"/%s/\">Home</a>\n"
+                "- This is essential for maintaining language context during navigation",
+                final_system_prompt,
+                display_name ? display_name : lang_selection->selected_locale,
+                lang_selection->selected_locale,
+                tier ? tier : "Unknown",
+                url_lang_code,
+                url_lang_code,
+                url_lang_code,
+                url_lang_code);
+                
+            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                         "[mod_muse_ai] Added translation instructions for %s", lang_selection->selected_locale);
+        }
+        
+        char *escaped_system = escape_json_string(r->pool, enhanced_system_prompt);
         char *escaped_user = escape_json_string(r->pool, page_prompt);
         if (cfg->max_tokens > 0) {
             json_payload = apr_psprintf(r->pool, 

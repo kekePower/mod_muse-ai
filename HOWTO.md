@@ -8,12 +8,13 @@ A comprehensive step-by-step guide to install, configure, and use the mod_muse-a
 2. [Installation](#installation)
 3. [Basic Configuration](#basic-configuration)
 4. [Advanced Configuration](#advanced-configuration)
-5. [Setting Up .ai File Handler](#setting-up-ai-file-handler)
-6. [Creating Prompt Templates](#creating-prompt-templates)
-7. [Testing Your Installation](#testing-your-installation)
-8. [Troubleshooting](#troubleshooting)
-9. [Production Deployment](#production-deployment)
-10. [Configuration Reference](#configuration-reference)
+5. [Translation System Setup](#translation-system-setup)
+6. [Setting Up .ai File Handler](#setting-up-ai-file-handler)
+7. [Creating Prompt Templates](#creating-prompt-templates)
+8. [Testing Your Installation](#testing-your-installation)
+9. [Troubleshooting](#troubleshooting)
+10. [Production Deployment](#production-deployment)
+11. [Configuration Reference](#configuration-reference)
 
 ---
 
@@ -202,6 +203,279 @@ MuseAiMetricsEnable On
 
 ---
 
+## Translation System Setup
+
+mod_muse-ai includes a powerful AI translation system that supports 46 languages with automatic language detection and intelligent translation routing.
+
+### Overview
+
+The translation system supports multiple language selection methods:
+- **URL Prefixes**: `/es/page.ai`, `/fr/docs/file.ai`
+- **Query Parameters**: `?lang=es`, `?locale=fr_FR`
+- **Cookies**: Remembers user language preferences
+- **Accept-Language Headers**: Browser language preferences
+- **Fallback**: Default to original file language
+
+### Supported Languages
+
+The system supports 46 languages organized by proficiency tiers:
+
+**Tier 1 (High Quality)**: English (US/UK), German, Spanish (ES/MX), French, Italian, Japanese, Portuguese (BR/PT), Chinese (Simplified/Traditional)
+
+**Tier 2 (Good Quality)**: Arabic, Bengali, Czech, Danish, Greek, Finnish, Hebrew, Hindi, Hungarian, Korean, Norwegian, Polish, Russian, Swedish, Thai, Turkish, Ukrainian, Vietnamese
+
+**Tier 3 (Functional)**: Bulgarian, Catalan, Croatian, Dutch, Estonian, Latvian, Lithuanian, Romanian, Slovak, Slovenian
+
+For the complete list, see `docs/pruned-languages.csv`.
+
+### Basic Translation Setup
+
+#### Step 1: Enable URL Rewriting (Recommended)
+
+Add to your Apache configuration or `.htaccess`:
+
+```apache
+# Enable mod_rewrite
+RewriteEngine On
+
+# Handle language-prefixed URLs
+RewriteRule ^([a-z]{2,3})/(.+\.ai)$ /$2 [L,E=MUSE_LANG_PREFIX:$1]
+RewriteRule ^([a-z]{2,3})/(.+/)$ /$2index.ai [L,E=MUSE_LANG_PREFIX:$1]
+RewriteRule ^([a-z]{2,3})/?$ /index.ai [L,E=MUSE_LANG_PREFIX:$1]
+
+# Configure .ai file handling
+<FilesMatch "\.ai$">
+    SetHandler muse-ai-handler
+</FilesMatch>
+
+# Handle language-prefixed URLs
+<LocationMatch "^/[a-z]{2,3}/.+\.ai$">
+    SetHandler muse-ai-handler
+</LocationMatch>
+```
+
+#### Step 2: Alternative Simple Setup
+
+If you can't use URL rewriting, the translation system works automatically with query parameters:
+
+```apache
+# Basic setup - no rewriting needed
+<FilesMatch "\.ai$">
+    SetHandler muse-ai-handler
+    SetEnv MUSE_DEFAULT_LANG "en_US"
+</FilesMatch>
+```
+
+Users can then access translations via:
+- `page.ai?lang=es` (Spanish)
+- `page.ai?locale=fr_FR` (French)
+- `page.ai?language=de` (German)
+
+### Advanced Translation Configuration
+
+#### Complete Virtual Host Example
+
+```apache
+<VirtualHost *:80>
+    ServerName multilingual.example.com
+    DocumentRoot /var/www/html
+    
+    # Basic mod_muse_ai configuration
+    MuseAiApiKey "your-api-key-here"
+    MuseAiEndpoint "https://api.openai.com/v1/chat/completions"
+    MuseAiModel "gpt-4"
+    MuseAiMaxTokens 2000
+    
+    # Translation configuration
+    RewriteEngine On
+    
+    # Language prefix rules
+    RewriteRule ^/([a-z]{2,3})/(.+\.ai)$ /$2 [E=MUSE_LANG_PREFIX:$1,L]
+    RewriteRule ^/([a-z]{2,3})/(.+/)$ /$2index.ai [E=MUSE_LANG_PREFIX:$1,L]
+    RewriteRule ^/([a-z]{2,3})/?$ /index.ai [E=MUSE_LANG_PREFIX:$1,L]
+    
+    # Add trailing slash to language codes
+    RewriteRule ^/([a-z]{2,3})$ /$1/ [R=301,L]
+    
+    # Language switching utility
+    RewriteCond %{QUERY_STRING} ^to=([a-z]{2,3})&return=(.+)$
+    RewriteRule ^/switch-lang$ /%1/%2? [R=302,L]
+    
+    # Configure handlers
+    <FilesMatch "\.ai$">
+        SetHandler muse-ai-handler
+        SetEnv MUSE_DEFAULT_LANG "en_US"
+    </FilesMatch>
+    
+    <LocationMatch "^/[a-z]{2,3}/.+\.ai$">
+        SetHandler muse-ai-handler
+    </LocationMatch>
+</VirtualHost>
+```
+
+#### Using .htaccess
+
+For shared hosting or when you can't modify the main Apache config:
+
+```apache
+# Copy examples/.htaccess-translation to your document root as .htaccess
+RewriteEngine On
+
+# Language prefix handling
+RewriteRule ^([a-z]{2,3})/(.+\.ai)$ /$2 [L,E=MUSE_LANG_PREFIX:$1]
+RewriteRule ^([a-z]{2,3})/(.+/)$ /$2index.ai [L,E=MUSE_LANG_PREFIX:$1]
+RewriteRule ^([a-z]{2,3})/?$ /index.ai [L,E=MUSE_LANG_PREFIX:$1]
+
+<FilesMatch "\.ai$">
+    SetHandler muse-ai-handler
+    SetEnv MUSE_DEFAULT_LANG "en_US"
+</FilesMatch>
+```
+
+### Testing Translation
+
+#### Step 1: Create Test Content
+
+Create `/var/www/html/welcome.ai`:
+
+```
+Welcome to our website! This is a test page for the translation system.
+
+Features:
+- Automatic language detection
+- High-quality AI translation
+- Support for 46 languages
+- SEO-friendly URLs
+
+Please explore our content in your preferred language.
+```
+
+#### Step 2: Test Different Access Methods
+
+```bash
+# Test URL prefix (if rewriting enabled)
+curl http://localhost/es/welcome.ai
+curl http://localhost/fr/welcome.ai
+curl http://localhost/de/welcome.ai
+
+# Test query parameters
+curl "http://localhost/welcome.ai?lang=es"
+curl "http://localhost/welcome.ai?locale=fr_FR"
+curl "http://localhost/welcome.ai?language=de"
+
+# Test with Accept-Language header
+curl -H "Accept-Language: es-ES,es;q=0.9" http://localhost/welcome.ai
+curl -H "Accept-Language: fr-FR,fr;q=0.8" http://localhost/welcome.ai
+```
+
+#### Step 3: Test Language Switching
+
+If you implemented the language switching utility:
+
+```bash
+# Switch language and redirect
+curl "http://localhost/switch-lang?to=es&return=welcome.ai"
+# Should redirect to: /es/welcome.ai
+```
+
+### Language Detection Priority
+
+The system uses this priority order:
+
+1. **URL Prefix** (`/es/page.ai`) - Highest priority
+2. **Query Parameter** (`?lang=es`) - Explicit user choice
+3. **Cookie** (`muse_lang=es`) - Remembered preference
+4. **Accept-Language Header** - Browser preference
+5. **Fallback** - Original file language or configured default
+
+### Enhanced Language Code System
+
+**The system now supports both short codes with smart defaults and full locale codes for precise control:**
+
+#### Smart Defaults for Short Codes
+
+| Short Code | Smart Default | Reasoning |
+|------------|---------------|----------|
+| `zh` | `zh_CN` (Simplified Chinese) | Most widely used (1+ billion users) |
+| `pt` | `pt_BR` (Brazilian Portuguese) | Larger population than European Portuguese |
+| `es` | `es_ES` (Spain Spanish) | Original/standard Spanish |
+| `en` | `en_US` (US English) | Most common on the web |
+
+#### Full Locale Code Support
+
+**URL Format:** Use hyphens in URLs, converted to underscores internally
+
+| URL Format | Internal Locale | Language |
+|------------|----------------|----------|
+| `/zh-cn/page` | `zh_CN` | Simplified Chinese |
+| `/zh-tw/page` | `zh_TW` | Traditional Chinese |
+| `/pt-br/page` | `pt_BR` | Brazilian Portuguese |
+| `/pt-pt/page` | `pt_PT` | European Portuguese |
+| `/es-es/page` | `es_ES` | Spain Spanish |
+| `/es-mx/page` | `es_MX` | Mexican Spanish |
+| `/en-us/page` | `en_US` | US English |
+| `/en-gb/page` | `en_GB` | British English |
+
+**Examples:**
+- `/zh/page` → Smart default: Simplified Chinese (`zh_CN`)
+- `/zh-tw/page` → Explicit: Traditional Chinese (`zh_TW`)
+- `/pt/page` → Smart default: Brazilian Portuguese (`pt_BR`)
+- `/pt-pt/page` → Explicit: European Portuguese (`pt_PT`)
+
+**Best Practice:** Use short codes for common cases, full locale codes when precision matters.
+
+### Translation Quality
+
+The system includes proficiency tiers to help you understand translation quality:
+
+- **Tier 1 (High)**: Excellent translations with nuanced understanding
+- **Tier 2 (Good)**: Reliable translations suitable for most content
+- **Tier 3 (Functional)**: Basic translations, good for understanding
+
+The tier information is automatically included in translation instructions to the AI.
+
+### Troubleshooting Translation
+
+#### Common Issues
+
+**Language not detected:**
+```bash
+# Check Apache error logs
+tail -f /var/log/apache2/error.log
+
+# Look for language detection messages
+grep "language_selection" /var/log/apache2/error.log
+```
+
+**URL rewriting not working:**
+```bash
+# Verify mod_rewrite is enabled
+apache2ctl -M | grep rewrite
+
+# Check .htaccess permissions
+ls -la /var/www/html/.htaccess
+```
+
+**Translation not applied:**
+- Verify the language code is supported (check `docs/pruned-languages.csv`)
+- Ensure the AI backend is responding
+- Check that translation instructions are being added to prompts
+
+#### Debug Mode
+
+Enable debug logging:
+
+```apache
+<FilesMatch "\.ai$">
+    SetHandler muse-ai-handler
+    SetEnv MUSE_LANG_DEBUG "1"
+</FilesMatch>
+```
+
+This will log detailed language detection information to the Apache error log.
+
+---
+
 ## Setting Up .ai File Handler
 
 The .ai file handler allows you to create dynamic web pages using AI by placing `.ai` files in your document root.
@@ -345,6 +619,50 @@ curl "http://localhost/health"
 # Check metrics
 curl "http://localhost/metrics"
 ```
+
+---
+
+## URL Localization
+
+The translation system automatically updates navigation links to maintain language context. When a user visits `/es/page.ai`, all navigation links are updated to include the `/es/` prefix.
+
+### How It Works
+
+**Automatic Link Updates:**
+```html
+<!-- Original navigation -->
+<nav>
+    <a href="/">Home</a> | 
+    <a href="/features">Features</a> | 
+    <a href="/documentation">Documentation</a>
+</nav>
+
+<!-- Automatically becomes (for Spanish) -->
+<nav>
+    <a href="/es/">Inicio</a> | 
+    <a href="/es/features">Características</a> | 
+    <a href="/es/documentation">Documentación</a>
+</nav>
+```
+
+**Supported URL Formats:**
+- **Clean URLs**: `/es/features`, `/de/documentation` (recommended)
+- **With .ai extension**: `/es/features.ai`, `/fr/page.ai`
+- **Directory URLs**: `/es/docs/`, `/fr/help/`
+- **Root language**: `/es/`, `/fr/`, `/de/`
+
+**Smart Asset Handling:**
+- ✅ **Navigation links**: Updated with language prefix
+- ✅ **Static assets**: CSS, JS, images remain unchanged
+- ✅ **External links**: GitHub, social media links unchanged
+- ✅ **Anchors**: `#section` links remain unchanged
+
+### Benefits
+
+- **Language Persistence**: Users stay in their selected language while navigating
+- **SEO-Friendly**: Clean URLs like `/es/features` instead of query parameters
+- **Professional UX**: Seamless multilingual website experience
+- **Automatic**: No manual link management required
 
 ---
 

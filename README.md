@@ -67,6 +67,9 @@ mod_muse-ai is experimental software under active development. Current status:
 - AI service integration (OpenAI API, Ollama)
 - Streaming responses
 - System prompt templates
+- **AI-powered translation system (46 languages)**
+- **URL localization with language prefixes**
+- **Multi-method language detection (URL, query, cookie, headers)**
 
 **In Development:**
 - Advanced caching and performance features
