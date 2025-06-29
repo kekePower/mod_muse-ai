@@ -1,81 +1,45 @@
 # mod_muse-ai
 
-🚀 **Transform your Apache web server into an AI-powered content generation engine**
+**An Apache module for AI-powered content generation**
 
 > 🌊 **Vibe Coded with [Windsurf](https://windsurf.com/)** - This entire project was developed using Windsurf's revolutionary AI Flow paradigm, showcasing the power of human-AI collaboration in creating production-ready software.
 
 ## What is mod_muse-ai?
 
-Imagine if your web server could think, create, and respond intelligently to every request. That's exactly what mod_muse-ai does – it's an Apache module that brings artificial intelligence directly into your web server, making it possible to generate dynamic, personalized content on-the-fly.
+mod_muse-ai is an experimental Apache module that integrates AI content generation into your web server. It allows you to create `.ai` files containing prompts that get processed by AI services to generate web content.
 
-Instead of serving static HTML files, your Apache server can now:
-- **Create unique content** for every visitor based on their needs
-- **Generate entire web pages** from simple text prompts
-- **Work with ANY OpenAI/Ollama compatible AI service** – cloud or local
-- **Respond to natural language queries** with rich, formatted content
-- **Adapt content in real-time** without any backend complexity
+The module can:
+- Process `.ai` files containing text prompts
+- Generate web pages using AI services (OpenAI API, Ollama, etc.)
+- Stream AI responses back to visitors
+- Work with OpenAI-compatible APIs
 
 ## Why mod_muse-ai?
 
-### 🎯 **Simplicity Meets Power**
-No complex backend infrastructure, no additional servers to manage. Just drop an `.ai` file in your web directory with a simple prompt like "Create a product page for eco-friendly water bottles" and watch your server generate a complete, professional webpage.
+This project explores integrating AI content generation directly into Apache, eliminating the need for separate backend services. It's a simple approach to AI-powered web content that works with existing Apache configurations.
 
-### 🌍 **Universal AI Compatibility**
-Works with **ANY OpenAI API or Ollama API compatible service** – OpenAI, Google Gemini, Anthropic Claude, local Ollama models, or any custom AI service that speaks the same language. One module, unlimited AI possibilities. Switch between providers instantly without changing your code.
+**Note:** This is experimental software in active development. While the core functionality works, it's not yet recommended for production use.
 
-### ⚡ **Lightning Fast**
-Content streams directly from AI to your visitors in real-time. No waiting, no loading screens – just instant, intelligent responses that feel natural and engaging.
+## Current Features
 
-### 🛠️ **Designed for Real Websites**
-While still in active development, mod_muse-ai is built with production use in mind. We're implementing enterprise features like caching, rate limiting, and monitoring to ensure your AI-powered site will be fast, secure, and reliable when ready for deployment.
+- **`.ai` file processing** - Create files with prompts that generate web content
+- **AI service integration** - Works with OpenAI API and Ollama
+- **Streaming responses** - Content is delivered as it's generated
+- **System prompts** - Define consistent styling and layout templates
+- **Dual URL support** - Access content via `/page.ai` or `/page` URLs
 
-## ✨ Core Features
+## Getting Started
 
-### 📝 **Smart Content Creation**
-Write simple prompts and get complete, professional web pages. Perfect for blogs, product pages, documentation, or any content that needs to be fresh and engaging.
+See [HOWTO.md](HOWTO.md) for installation and configuration instructions.
 
-### 🎨 **Consistent Design**
-Define your site's look and feel once, then let AI create content that automatically matches your brand and style guidelines.
-
-### 🔄 **Real-time Streaming**
-Visitors see content appearing as it's being generated – creating an engaging, interactive experience that feels alive.
-
-### 🧹 **Clean Output**
-Advanced content processing ensures your pages look professional, with no messy AI artifacts or formatting issues.
-
-### 📊 **Enterprise Ready**
-Built-in monitoring, caching, and security features mean you can confidently use this in production environments.
-
-## 🚀 See It In Action
-
-**Want to try it yourself?** Check out our **[HOWTO.md](HOWTO.md)** for step-by-step installation instructions.
-
-### Quick Example
+### Basic Example
 ```bash
-# 1. Install and configure (see HOWTO.md for details)
-# 2. Create a simple AI-powered page
-echo "Write a welcome page for a local bakery" > /var/www/html/welcome.ai
+# Create an AI-powered page
+echo "Write a simple HTML page with a welcome message" > /var/www/html/welcome.ai
 
-# 3. Visit http://localhost/welcome.ai
-# Your server generates a complete webpage about the bakery!
+# Visit http://localhost/welcome.ai
+# The AI will generate content based on your prompt
 ```
-
-### What You Can Build
-
-**🎆 Dynamic Websites**  
-Create pages that adapt to user needs, seasonal content, or current events – all automatically generated and always fresh.
-
-**💬 Interactive Help Systems**  
-Let visitors ask questions in plain English and get helpful, contextual responses formatted as beautiful web pages.
-
-**📋 Smart Documentation**  
-Generate user guides, FAQs, and tutorials that automatically adjust based on user experience level or specific use cases.
-
-**🛒 E-commerce Content**  
-Create product descriptions, comparison pages, and personalized recommendations that feel natural and engaging.
-
-**📰 Content Publishing**  
-Build blogs, news sites, or content platforms where AI helps create, format, and optimize content for your audience.
 
 ## 🏗️ Architecture
 
@@ -92,34 +56,36 @@ Build blogs, news sites, or content platforms where AI helps create, format, and
     └─────────┘           └─────────────┘
 ```
 
-## 🌟 Current Development Status
+## Development Status
 
-mod_muse-ai is in **active development** with core functionality working and several advanced features in progress. The project is designed with production use in mind and includes:
+mod_muse-ai is experimental software under active development. Current status:
 
-- **Working core features** – basic AI integration and .ai file processing
-- **Advanced features in development** – caching, rate limiting, and connection pooling
-- **Production-focused design** – comprehensive error handling and security considerations
-- **Monitoring capabilities** – metrics and health check endpoints being implemented
+**Working:**
+- Basic `.ai` file processing
+- AI service integration (OpenAI API, Ollama)
+- Streaming responses
+- System prompt templates
 
-## 🤝 Join Our Community
+**In Development:**
+- Advanced caching and performance features
+- Enhanced error handling
+- Production hardening
 
-**We'd love your help making mod_muse-ai even better!** Whether you're a seasoned developer or just getting started, there are many ways to contribute:
+**Not Ready For:**
+- Production use
+- High-traffic websites
+- Mission-critical applications
 
-🐛 **Found a bug?** [Report it on GitHub](https://github.com/kekePower/mod_muse-ai/issues) – we fix issues quickly!
+## Contributing
 
-💡 **Have an idea?** Share your feature suggestions – the best ideas come from real users
+This is an experimental project and contributions are welcome. If you're interested in AI-powered web content or Apache module development, feel free to:
 
-📝 **Improve documentation** – help others discover what you've learned
+- Report bugs or issues on [GitHub](https://github.com/kekePower/mod_muse-ai/issues)
+- Suggest improvements or features
+- Contribute code or documentation
+- Share your experiences with the module
 
-🛠️ **Write code** – from small fixes to major features, every contribution matters
-
-🌍 **Spread the word** – tell others about your AI-powered website!
-
-**Getting started is easy:** Check out our [contribution guidelines](CONTRIBUTING.md) or just jump into the [GitHub discussions](https://github.com/kekePower/mod_muse-ai/discussions) to say hello.
-
-## 📄 License
-
-mod_muse-ai is open source software released under the **Apache License 2.0**. This means you can use it freely in both personal and commercial projects, modify it to fit your needs, and even redistribute it. The only requirement is to include the original license notice.
+See [GitHub discussions](https://github.com/kekePower/mod_muse-ai/discussions) for project updates and community discussion.
 
 ## 🔗 Powered By
 
@@ -129,6 +95,6 @@ mod_muse-ai is open source software released under the **Apache License 2.0**. T
 
 ---
 
-🎆 **Ready to give your website superpowers?** 
+## 📄 License
 
-**Start here:** [HOWTO.md](HOWTO.md) → **Get help:** [GitHub Discussions](https://github.com/kekePower/mod_muse-ai/discussions) → **Contribute:** [GitHub Issues](https://github.com/kekePower/mod_muse-ai/issues)
+mod_muse-ai is open source software released under the **Apache License 2.0**. This means you can use it freely in both personal and commercial projects, modify it to fit your needs, and even redistribute it. The only requirement is to include the original license notice.

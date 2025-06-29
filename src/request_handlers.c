@@ -214,7 +214,59 @@ int enhanced_muse_ai_handler(request_rec *r)
         return ai_file_handler(r);
     }
     
-    /* We only handle requests for /ai */
+    /* Check if this is an extensionless request that might have a corresponding .ai file */
+    if (r->uri && strcmp(r->uri, "/ai") != 0) {
+        /* Construct potential .ai file path */
+        char *potential_ai_uri = apr_pstrcat(r->pool, r->uri, ".ai", NULL);
+        char *potential_ai_path = NULL;
+        
+        /* Get document root to construct full file path */
+        core_server_config *core_cfg = ap_get_core_module_config(r->server->module_config);
+        if (core_cfg && core_cfg->ap_document_root) {
+            potential_ai_path = apr_pstrcat(r->pool, core_cfg->ap_document_root, potential_ai_uri, NULL);
+        } else {
+            /* If we can't get document root, try using r->filename approach */
+            if (r->filename) {
+                potential_ai_path = apr_pstrcat(r->pool, r->filename, ".ai", NULL);
+            }
+        }
+        
+        /* Check if the .ai file exists */
+        if (potential_ai_path) {
+            apr_finfo_t finfo;
+            if (apr_stat(&finfo, potential_ai_path, APR_FINFO_TYPE, r->pool) == APR_SUCCESS && 
+                finfo.filetype == APR_REG) {
+                ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, 
+                    "[mod_muse_ai] Found corresponding .ai file for extensionless request: %s -> %s", 
+                    r->uri, potential_ai_path);
+                
+                /* Temporarily modify the request to point to the .ai file */
+                char *original_uri = r->uri;
+                char *original_filename = r->filename;
+                
+                r->uri = potential_ai_uri;
+                r->filename = potential_ai_path;
+                
+                /* Call the ai_file_handler */
+                int result = ai_file_handler(r);
+                
+                /* Restore original URI and filename */
+                r->uri = original_uri;
+                r->filename = original_filename;
+                
+                return result;
+            } else {
+                ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, 
+                    "[mod_muse_ai] No corresponding .ai file found for: %s (checked: %s)", 
+                    r->uri, potential_ai_path);
+            }
+        }
+        
+        /* No .ai file found, decline to handle this request */
+        return DECLINED;
+    }
+    
+    /* Handle the traditional /ai endpoint */
     if (strcmp(r->uri, "/ai") != 0) {
         return DECLINED;
     }
