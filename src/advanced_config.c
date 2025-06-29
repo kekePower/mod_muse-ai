@@ -24,6 +24,7 @@ void *create_advanced_muse_ai_config(apr_pool_t *pool, server_rec *s)
     cfg->timeout = 300;
     cfg->debug = 0;
     cfg->streaming = 1;
+    cfg->max_tokens = 16384;  /* Default to 16k tokens */
     
     /* Set all other pointers to NULL to avoid crashes */
     cfg->reasoning_model_patterns = NULL;
@@ -50,6 +51,7 @@ void *merge_advanced_muse_ai_config(apr_pool_t *p, void *base_conf, void *new_co
     merged->api_key = new->api_key ? new->api_key : base->api_key;
     merged->model = new->model ? new->model : base->model;
     merged->timeout = (new->timeout > 0 && new->timeout != 300) ? new->timeout : base->timeout;
+    merged->max_tokens = (new->max_tokens != 16384) ? new->max_tokens : base->max_tokens;
     
     // DEBUG: Log timeout merge
     ap_log_error(APLOG_MARK, APLOG_ERR, 0, NULL,
@@ -376,6 +378,21 @@ const char *set_muse_ai_streaming(cmd_parms *cmd, void *dcfg, const char *arg)
     return NULL;
 }
 
+const char *set_muse_ai_max_tokens(cmd_parms *cmd, void *dcfg, const char *arg)
+{
+    (void)dcfg;
+    extern module muse_ai_module;
+    advanced_muse_ai_config *cfg = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
+    int value = atoi(arg);
+    
+    if (value < 0 || value > 200000) {
+        return "MuseAiMaxTokens must be between 0 and 200000 (0 = no limit)";
+    }
+    
+    cfg->max_tokens = value;
+    return NULL;
+}
+
 const command_rec muse_ai_advanced_cmds[] = {
     AP_INIT_TAKE1("MuseAiEndpoint", set_muse_ai_endpoint, NULL, RSRC_CONF, "The endpoint URL for the MuseWeb AI service"),
     AP_INIT_TAKE1("MuseAiApiKey", set_muse_ai_api_key, NULL, RSRC_CONF, "The API key for commercial AI providers"),
@@ -396,6 +413,7 @@ const command_rec muse_ai_advanced_cmds[] = {
     AP_INIT_TAKE1("MuseAiSecurityMaxRequestSize", set_security_max_request_size, NULL, RSRC_CONF, "Maximum allowed request body size in bytes"),
     AP_INIT_TAKE1("MuseAiPromptsDir", set_muse_ai_prompts_dir, NULL, RSRC_CONF, "Directory for prompt files"),
     AP_INIT_TAKE1("MuseAiPromptsMinify", set_muse_ai_prompts_minify, NULL, RSRC_CONF, "Enable minified layout for prompts (On/Off)"),
+    AP_INIT_TAKE1("MuseAiMaxTokens", set_muse_ai_max_tokens, NULL, RSRC_CONF, "Maximum number of tokens for AI response generation (0 = no limit)"),
     {NULL}
 };
 

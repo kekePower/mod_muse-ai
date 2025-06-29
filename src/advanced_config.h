@@ -15,6 +15,7 @@ typedef struct advanced_muse_ai_config {
     int timeout;
     int debug;
     int streaming;
+    int max_tokens;
     
     /* Phase 3: Advanced Features */
     
@@ -132,6 +133,7 @@ const char *set_streaming_buffer_size(cmd_parms *cmd, void *cfg, const char *arg
 const char *set_security_max_request_size(cmd_parms *cmd, void *cfg, const char *arg);
 const char *set_muse_ai_prompts_dir(cmd_parms *cmd, void *cfg, const char *arg);
 const char *set_muse_ai_prompts_minify(cmd_parms *cmd, void *cfg, const char *arg);
+const char *set_muse_ai_max_tokens(cmd_parms *cmd, void *cfg, const char *arg);
 
 /* Metrics functions */
 muse_ai_metrics_t *get_global_metrics(void);

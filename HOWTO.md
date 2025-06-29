@@ -112,6 +112,7 @@ MuseAiModel "llama3.2:latest"
 MuseAiTimeout 300
 MuseAiDebug On
 MuseAiStreaming On
+MuseAiMaxTokens 16384
 ```
 
 **💡 Recommended**: Use the [`examples/mod_muse-ai-simple.conf`](examples/mod_muse-ai-simple.conf) configuration for now, as it includes all the currently working features. The advanced configuration options below are still in development.
@@ -536,6 +537,7 @@ curl "http://localhost/metrics"
 | `MuseAiTimeout` | Integer | `300` | Request timeout in seconds |
 | `MuseAiDebug` | Flag | `Off` | Enable debug logging |
 | `MuseAiStreaming` | Flag | `On` | Enable streaming responses |
+| `MuseAiMaxTokens` | Integer | `16384` | Maximum tokens for AI response generation (0 = no limit) |
 | `MuseAiPromptsDir` | String | `(none)` | Directory containing prompt templates |
 
 ### Performance Directives
@@ -543,7 +545,7 @@ curl "http://localhost/metrics"
 | Directive | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `MuseAiPoolMaxConnections` | Integer | `10` | Maximum connections in pool |
-| `MuseAiStreamingBufferSize` | Integer | `8192` | Streaming buffer size in bytes |
+| `MuseAiStreamingBufferSize` | Integer | `auto` | Streaming buffer size (auto-calculated from MuseAiMaxTokens) |
 | `MuseAiSecurityMaxRequestSize` | Integer | `1048576` | Maximum request size (1MB) |
 
 ### Caching Directives
@@ -589,11 +591,12 @@ MuseAiModel "llama3.2:latest"
 MuseAiTimeout 300
 MuseAiDebug Off
 MuseAiStreaming On
+MuseAiMaxTokens 16384
 MuseAiPromptsDir "/etc/muse-ai/prompts"
 
 # Performance Configuration
 MuseAiPoolMaxConnections 20
-MuseAiStreamingBufferSize 8192
+# MuseAiStreamingBufferSize auto-calculated from MuseAiMaxTokens (16384 * 4 = 65536 bytes)
 MuseAiSecurityMaxRequestSize 1048576
 
 # Caching Configuration

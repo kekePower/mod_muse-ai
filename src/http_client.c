@@ -1,5 +1,31 @@
 #include "mod_muse_ai.h"
 #include <string.h>
+#include "advanced_streaming.h"
+
+/* Calculate optimal buffer size based on max_tokens configuration */
+static size_t calculate_buffer_size(int max_tokens) {
+    size_t buffer_size;
+    
+    if (max_tokens <= 0) {
+        /* No token limit set, use a large default buffer */
+        buffer_size = 32768;  /* 32KB for unlimited responses */
+    } else {
+        /* Calculate buffer size: tokens * 4 characters per token (conservative estimate) */
+        buffer_size = max_tokens * 4;
+        
+        /* Ensure minimum buffer size for functionality */
+        if (buffer_size < 8192) {
+            buffer_size = 8192;  /* 8KB minimum */
+        }
+        
+        /* Cap maximum buffer size to prevent excessive memory usage */
+        if (buffer_size > 1048576) {
+            buffer_size = 1048576;  /* 1MB maximum */
+        }
+    }
+    
+    return buffer_size;
+}
 
 /* Parse SSE (Server-Sent Events) data chunk */
 static char *parse_sse_chunk(apr_pool_t *pool, const char *chunk)
@@ -126,8 +152,20 @@ static char *extract_json_content(apr_pool_t *pool, const char *json_data)
 static int handle_streaming_response(request_rec *r, muse_ai_config *cfg, 
                                    apr_socket_t *sock, streaming_state_t *state)
 {
-    char line_buffer[8192];
-    char accumulated_buffer[16384];
+    /* Calculate dynamic buffer sizes based on max_tokens */
+    size_t buffer_size = calculate_buffer_size(cfg->max_tokens);
+    size_t line_buffer_size = buffer_size / 2;  /* Line buffer is half of total buffer */
+    size_t accumulated_buffer_size = buffer_size;
+    
+    if (cfg->debug) {
+        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                     "mod_muse_ai: Dynamic buffer sizing - max_tokens: %d, buffer_size: %zu, line_buffer: %zu",
+                     cfg->max_tokens, buffer_size, line_buffer_size);
+    }
+    
+    /* Allocate dynamic buffers */
+    char *line_buffer = apr_palloc(r->pool, line_buffer_size);
+    char *accumulated_buffer = apr_palloc(r->pool, accumulated_buffer_size);
     int accumulated_len = 0;
     apr_size_t len;
     apr_status_t rv;
@@ -144,7 +182,7 @@ static int handle_streaming_response(request_rec *r, muse_ai_config *cfg,
     }
     
     while (1) {
-        len = sizeof(line_buffer) - 1;
+        len = line_buffer_size - 1;
         
         if (cfg->debug) {
             ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
@@ -195,7 +233,7 @@ static int handle_streaming_response(request_rec *r, muse_ai_config *cfg,
         }
         
         /* Add to accumulated buffer */
-        if (accumulated_len + len < sizeof(accumulated_buffer) - 1) {
+        if (accumulated_len + len < accumulated_buffer_size - 1) {
             memcpy(accumulated_buffer + accumulated_len, body_start, len);
             accumulated_len += len;
             accumulated_buffer[accumulated_len] = '\0';
@@ -448,7 +486,8 @@ int make_backend_request(request_rec *r, muse_ai_config *cfg,
         return result;
     } else {
         /* Handle non-streaming response (original behavior) */
-        char buffer[8192];
+        size_t buffer_size = calculate_buffer_size(cfg->max_tokens);
+        char *buffer = apr_palloc(r->pool, buffer_size);
         apr_size_t len;
         char *response = NULL;
         apr_size_t response_len = 0;
@@ -458,7 +497,7 @@ int make_backend_request(request_rec *r, muse_ai_config *cfg,
         response_len = 0;
         
         while (1) {
-            len = sizeof(buffer) - 1;
+            len = buffer_size - 1;
             rv = apr_socket_recv(sock, buffer, &len);
             
             if (rv == APR_EOF || len == 0) {

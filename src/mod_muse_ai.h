@@ -19,6 +19,7 @@ typedef struct {
     char *model;        /* AI model to use */
     char *api_key;      /* API key for authentication */
     int streaming;      /* Enable streaming responses */
+    int max_tokens;     /* Maximum tokens for AI response generation */
 } muse_ai_config;
 
 /* Default configuration values */

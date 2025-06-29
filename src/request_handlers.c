@@ -157,33 +157,67 @@ int ai_file_handler(request_rec *r)
         /* Both system and user content */
         char *escaped_system = escape_json_string(r->pool, final_system_prompt);
         char *escaped_user = escape_json_string(r->pool, page_prompt);
-        json_payload = apr_psprintf(r->pool, 
-            "{\n"
-            "  \"model\": \"%s\",\n"
-            "  \"messages\": [\n"
-            "    {\"role\": \"system\", \"content\": \"%s\"},\n"
-            "    {\"role\": \"user\", \"content\": \"%s\"}\n"
-            "  ],\n"
-            "  \"stream\": %s\n"
-            "}",
-            cfg->model ? cfg->model : "default",
-            escaped_system,
-            escaped_user,
-            cfg->streaming ? "true" : "false");
+        if (cfg->max_tokens > 0) {
+            json_payload = apr_psprintf(r->pool, 
+                "{\n"
+                "  \"model\": \"%s\",\n"
+                "  \"messages\": [\n"
+                "    {\"role\": \"system\", \"content\": \"%s\"},\n"
+                "    {\"role\": \"user\", \"content\": \"%s\"}\n"
+                "  ],\n"
+                "  \"max_tokens\": %d,\n"
+                "  \"stream\": %s\n"
+                "}",
+                cfg->model ? cfg->model : "default",
+                escaped_system,
+                escaped_user,
+                cfg->max_tokens,
+                cfg->streaming ? "true" : "false");
+        } else {
+            json_payload = apr_psprintf(r->pool, 
+                "{\n"
+                "  \"model\": \"%s\",\n"
+                "  \"messages\": [\n"
+                "    {\"role\": \"system\", \"content\": \"%s\"},\n"
+                "    {\"role\": \"user\", \"content\": \"%s\"}\n"
+                "  ],\n"
+                "  \"stream\": %s\n"
+                "}",
+                cfg->model ? cfg->model : "default",
+                escaped_system,
+                escaped_user,
+                cfg->streaming ? "true" : "false");
+        }
     } else {
         /* Only user content */
         char *escaped_user = escape_json_string(r->pool, page_prompt);
-        json_payload = apr_psprintf(r->pool,
-            "{\n"
-            "  \"model\": \"%s\",\n"
-            "  \"messages\": [\n"
-            "    {\"role\": \"user\", \"content\": \"%s\"}\n"
-            "  ],\n"
-            "  \"stream\": %s\n"
-            "}",
-            cfg->model ? cfg->model : "default",
-            escaped_user,
-            cfg->streaming ? "true" : "false");
+        if (cfg->max_tokens > 0) {
+            json_payload = apr_psprintf(r->pool,
+                "{\n"
+                "  \"model\": \"%s\",\n"
+                "  \"messages\": [\n"
+                "    {\"role\": \"user\", \"content\": \"%s\"}\n"
+                "  ],\n"
+                "  \"max_tokens\": %d,\n"
+                "  \"stream\": %s\n"
+                "}",
+                cfg->model ? cfg->model : "default",
+                escaped_user,
+                cfg->max_tokens,
+                cfg->streaming ? "true" : "false");
+        } else {
+            json_payload = apr_psprintf(r->pool,
+                "{\n"
+                "  \"model\": \"%s\",\n"
+                "  \"messages\": [\n"
+                "    {\"role\": \"user\", \"content\": \"%s\"}\n"
+                "  ],\n"
+                "  \"stream\": %s\n"
+                "}",
+                cfg->model ? cfg->model : "default",
+                escaped_user,
+                cfg->streaming ? "true" : "false");
+        }
     }
     
     ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] Generated JSON payload for AI file request");
@@ -195,7 +229,8 @@ int ai_file_handler(request_rec *r)
         .debug = cfg->debug,
         .model = cfg->model,
         .api_key = cfg->api_key,
-        .streaming = cfg->streaming
+        .streaming = cfg->streaming,
+        .max_tokens = cfg->max_tokens
     };
     
     /* Forward to backend */
@@ -315,7 +350,12 @@ int enhanced_muse_ai_handler(request_rec *r)
     if (r->method_number == M_POST) {
         ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] Handling POST request. Reading body.");
         apr_bucket_brigade *bb = apr_brigade_create(r->pool, r->connection->bucket_alloc);
-        if (ap_get_brigade(r->input_filters, bb, AP_MODE_READBYTES, APR_BLOCK_READ, 8192) == APR_SUCCESS) {
+        /* Calculate dynamic buffer size for POST request reading */
+        size_t read_buffer_size = cfg->max_tokens > 0 ? (cfg->max_tokens * 4) : 32768;
+        if (read_buffer_size < 8192) read_buffer_size = 8192;  /* Minimum 8KB */
+        if (read_buffer_size > 1048576) read_buffer_size = 1048576;  /* Maximum 1MB */
+        
+        if (ap_get_brigade(r->input_filters, bb, AP_MODE_READBYTES, APR_BLOCK_READ, read_buffer_size) == APR_SUCCESS) {
             char *buf = apr_palloc(r->pool, 8193);
             apr_size_t len;
             if (apr_brigade_pflatten(bb, &buf, &len, r->pool) == APR_SUCCESS) {
@@ -400,8 +440,13 @@ int enhanced_muse_ai_handler(request_rec *r)
             if (user_prompt) {
                 char *escaped_system = escape_json_string(r->pool, final_system_prompt);
                 char *escaped_user = escape_json_string(r->pool, user_prompt);
-                json_payload = apr_psprintf(r->pool, "{\n  \"model\": \"%s\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": \"%s\"},\n    {\"role\": \"user\", \"content\": \"%s\"}\n  ],\n  \"stream\": %s\n}",
-                                           cfg->model ? cfg->model : "default", escaped_system, escaped_user, cfg->streaming ? "true" : "false");
+                if (cfg->max_tokens > 0) {
+                    json_payload = apr_psprintf(r->pool, "{\n  \"model\": \"%s\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": \"%s\"},\n    {\"role\": \"user\", \"content\": \"%s\"}\n  ],\n  \"max_tokens\": %d,\n  \"stream\": %s\n}",
+                                               cfg->model ? cfg->model : "default", escaped_system, escaped_user, cfg->max_tokens, cfg->streaming ? "true" : "false");
+                } else {
+                    json_payload = apr_psprintf(r->pool, "{\n  \"model\": \"%s\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": \"%s\"},\n    {\"role\": \"user\", \"content\": \"%s\"}\n  ],\n  \"stream\": %s\n}",
+                                               cfg->model ? cfg->model : "default", escaped_system, escaped_user, cfg->streaming ? "true" : "false");
+                }
             } else {
                 ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, "[mod_muse_ai] No index.ai or page.ai found for URI '%s'", r->uri);
                 return HTTP_NOT_FOUND;
@@ -422,11 +467,20 @@ int enhanced_muse_ai_handler(request_rec *r)
             ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r, "[mod_muse_ai] Failed to escape prompt string.");
             return HTTP_INTERNAL_SERVER_ERROR;
         }
-        json_payload = apr_psprintf(r->pool, 
-                                    "{\n  \"model\": \"%s\",\n  \"messages\": [\n    {\"role\": \"user\", \"content\": \"%s\"}\n  ],\n  \"stream\": %s\n}",
-                                    cfg->model ? cfg->model : "default", 
-                                    escaped_prompt, 
-                                    cfg->streaming ? "true" : "false");
+        if (cfg->max_tokens > 0) {
+            json_payload = apr_psprintf(r->pool, 
+                                        "{\n  \"model\": \"%s\",\n  \"messages\": [\n    {\"role\": \"user\", \"content\": \"%s\"}\n  ],\n  \"max_tokens\": %d,\n  \"stream\": %s\n}",
+                                        cfg->model ? cfg->model : "default", 
+                                        escaped_prompt, 
+                                        cfg->max_tokens,
+                                        cfg->streaming ? "true" : "false");
+        } else {
+            json_payload = apr_psprintf(r->pool, 
+                                        "{\n  \"model\": \"%s\",\n  \"messages\": [\n    {\"role\": \"user\", \"content\": \"%s\"}\n  ],\n  \"stream\": %s\n}",
+                                        cfg->model ? cfg->model : "default", 
+                                        escaped_prompt, 
+                                        cfg->streaming ? "true" : "false");
+        }
     }
 
     // Final check before making the request
@@ -448,7 +502,8 @@ int enhanced_muse_ai_handler(request_rec *r)
         .debug = cfg->debug,
         .model = cfg->model,
         .api_key = cfg->api_key,
-        .streaming = cfg->streaming
+        .streaming = cfg->streaming,
+        .max_tokens = cfg->max_tokens
     };
     
     if (cfg->debug) {
