@@ -2,6 +2,8 @@
 
 **An Apache module for AI-powered content generation**
 
+> ⚠️ **WORK IN PROGRESS** - This project is actively being developed and should be considered experimental. There will be bugs, there are certainly better ways to implement many features, and the codebase is evolving rapidly. Contributions, feedback, and improvements are not just welcome - they're essential!
+
 > 🌊 **Vibe Coded with [Windsurf](https://windsurf.com/)** - This entire project was developed using Windsurf's revolutionary AI Flow paradigm, showcasing the power of human-AI collaboration in creating production-ready software.
 
 ## What is mod_muse-ai?
@@ -18,7 +20,7 @@ The module can:
 
 This project explores integrating AI content generation directly into Apache, eliminating the need for separate backend services. It's a simple approach to AI-powered web content that works with existing Apache configurations.
 
-**Note:** This is experimental software in active development. While the core functionality works, it's not yet recommended for production use.
+**Important:** This is experimental software under active development. Expect bugs, rough edges, and frequent changes. The code likely contains suboptimal implementations that could be improved - and that's where you come in!
 
 ## Current Features
 
@@ -78,14 +80,20 @@ mod_muse-ai is experimental software under active development. Current status:
 
 ## Contributing
 
-This is an experimental project and contributions are welcome. If you're interested in AI-powered web content or Apache module development, feel free to:
+**I need your help!** This project is a work in progress, and there are definitely better ways to implement many of the features. Whether you're an Apache expert, C developer, AI enthusiast, or just someone who found a bug - your contributions are invaluable.
 
-- Report bugs or issues on [GitHub](https://github.com/kekePower/mod_muse-ai/issues)
-- Suggest improvements or features
-- Contribute code or documentation
-- Share your experiences with the module
+### Ways to Contribute:
+- 🐛 **Report bugs** - Found something broken? [Open an issue](https://github.com/kekePower/mod_muse-ai/issues)
+- 💡 **Suggest improvements** - See a better way to do something? We want to hear it!
+- 🔧 **Submit code** - Fix bugs, add features, or refactor existing code
+- 📚 **Improve documentation** - Help others understand and use the project
+- 🧪 **Test and provide feedback** - Try it out and share your experiences
+- 🎨 **Share use cases** - Show us what you're building with mod_muse-ai
 
-See [GitHub discussions](https://github.com/kekePower/mod_muse-ai/discussions) for project updates and community discussion.
+### No Contribution is Too Small
+Whether it's fixing a typo, suggesting a better algorithm, or rewriting entire modules - all contributions are appreciated. This is a learning project, and we're all figuring it out together.
+
+Join the conversation on [GitHub discussions](https://github.com/kekePower/mod_muse-ai/discussions) for project updates, questions, and community discussion.
 
 ## 🔗 Powered By
 
