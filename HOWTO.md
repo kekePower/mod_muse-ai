@@ -388,6 +388,42 @@ The system uses this priority order:
 4. **Accept-Language Header** - Browser preference
 5. **Fallback** - Original file language or configured default
 
+### Enhanced Language Code System
+
+**The system now supports both short codes with smart defaults and full locale codes for precise control:**
+
+#### Smart Defaults for Short Codes
+
+| Short Code | Smart Default | Reasoning |
+|------------|---------------|----------|
+| `zh` | `zh_CN` (Simplified Chinese) | Most widely used (1+ billion users) |
+| `pt` | `pt_BR` (Brazilian Portuguese) | Larger population than European Portuguese |
+| `es` | `es_ES` (Spain Spanish) | Original/standard Spanish |
+| `en` | `en_US` (US English) | Most common on the web |
+
+#### Full Locale Code Support
+
+**URL Format:** Use hyphens in URLs, converted to underscores internally
+
+| URL Format | Internal Locale | Language |
+|------------|----------------|----------|
+| `/zh-cn/page` | `zh_CN` | Simplified Chinese |
+| `/zh-tw/page` | `zh_TW` | Traditional Chinese |
+| `/pt-br/page` | `pt_BR` | Brazilian Portuguese |
+| `/pt-pt/page` | `pt_PT` | European Portuguese |
+| `/es-es/page` | `es_ES` | Spain Spanish |
+| `/es-mx/page` | `es_MX` | Mexican Spanish |
+| `/en-us/page` | `en_US` | US English |
+| `/en-gb/page` | `en_GB` | British English |
+
+**Examples:**
+- `/zh/page` → Smart default: Simplified Chinese (`zh_CN`)
+- `/zh-tw/page` → Explicit: Traditional Chinese (`zh_TW`)
+- `/pt/page` → Smart default: Brazilian Portuguese (`pt_BR`)
+- `/pt-pt/page` → Explicit: European Portuguese (`pt_PT`)
+
+**Best Practice:** Use short codes for common cases, full locale codes when precision matters.
+
 ### Translation Quality
 
 The system includes proficiency tiers to help you understand translation quality:

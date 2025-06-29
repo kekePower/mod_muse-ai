@@ -5,9 +5,11 @@
 #include "advanced_config.h"
 #include "language_selection.h"
 #include "supported_locales.h"
+#include "error_pages.h"
 #include <apr_time.h>
 #include "cJSON.h"
 #include "http_core.h"
+#include <ctype.h>
 
 /* Forward declarations for metrics functions */
 int init_metrics_system(apr_pool_t *pool, server_rec *s);
@@ -17,6 +19,8 @@ char *generate_json_metrics(apr_pool_t *pool);
 
 /* Forward declaration for the main module structure */
 extern module AP_MODULE_DECLARE_DATA muse_ai_module;
+
+/* Language error handling is now handled by error_pages.c */
 
 /* Phase 3 integration functions */
 
@@ -105,8 +109,14 @@ int ai_file_handler(request_rec *r)
         return HTTP_INTERNAL_SERVER_ERROR;
     }
     
-    /* Detect language preferences and handle translation */
+    /* Detect language for translation */
     muse_language_selection_t *lang_selection = muse_detect_language(r, "en_US");
+    
+    /* Check for language errors and provide helpful error pages */
+    if (lang_selection && lang_selection->is_translation_requested && !lang_selection->is_supported) {
+        return generate_language_error_page(r, lang_selection);
+    }
+    
     if (lang_selection) {
         ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r, 
                      "[mod_muse_ai] Language detection: locale=%s, source=%s, translation_requested=%s",
@@ -188,11 +198,24 @@ int ai_file_handler(request_rec *r)
             const char *display_name = muse_get_locale_display_name(lang_selection->selected_locale);
             const char *tier = muse_get_locale_tier(lang_selection->selected_locale);
             
-            /* Extract language code for URL prefixes */
-            char lang_code_buffer[8];
-            const char *lang_code = "en"; /* default */
-            if (muse_extract_language_code(lang_selection->selected_locale, lang_code_buffer, sizeof(lang_code_buffer))) {
-                lang_code = lang_code_buffer;
+            /* Convert locale to URL-friendly format for URL prefixes */
+            char url_lang_buffer[16];
+            const char *url_lang_code = "en"; /* default */
+            
+            /* Convert es_MX -> es-mx, zh_CN -> zh-cn, etc. */
+            if (lang_selection->selected_locale) {
+                strncpy(url_lang_buffer, lang_selection->selected_locale, sizeof(url_lang_buffer) - 1);
+                url_lang_buffer[sizeof(url_lang_buffer) - 1] = '\0';
+                
+                /* Convert to lowercase and replace _ with - */
+                for (char *p = url_lang_buffer; *p; p++) {
+                    if (*p == '_') {
+                        *p = '-';
+                    } else {
+                        *p = tolower(*p);
+                    }
+                }
+                url_lang_code = url_lang_buffer;
             }
             
             enhanced_system_prompt = apr_psprintf(r->pool,
@@ -215,10 +238,10 @@ int ai_file_handler(request_rec *r)
                 display_name ? display_name : lang_selection->selected_locale,
                 lang_selection->selected_locale,
                 tier ? tier : "Unknown",
-                lang_code ? lang_code : "en",
-                lang_code ? lang_code : "en",
-                lang_code ? lang_code : "en",
-                lang_code ? lang_code : "en");
+                url_lang_code,
+                url_lang_code,
+                url_lang_code,
+                url_lang_code);
                 
             ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
                          "[mod_muse_ai] Added translation instructions for %s", lang_selection->selected_locale);

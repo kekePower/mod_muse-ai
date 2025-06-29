@@ -13,6 +13,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <ctype.h>
 
 /**
  * @brief Static array of all supported locales
@@ -114,12 +115,46 @@ const char *muse_get_full_locale(const char *language_code) {
         return NULL;
     }
     
+    // Convert hyphenated format to underscore format (es-mx -> es_MX)
+    static char normalized_input[16];
+    if (strchr(language_code, '-') != NULL) {
+        strncpy(normalized_input, language_code, sizeof(normalized_input) - 1);
+        normalized_input[sizeof(normalized_input) - 1] = '\0';
+        
+        // Convert to uppercase after hyphen and replace hyphen with underscore
+        char *hyphen = strchr(normalized_input, '-');
+        if (hyphen && hyphen[1] && hyphen[2]) {
+            *hyphen = '_';
+            hyphen[1] = toupper(hyphen[1]);
+            hyphen[2] = toupper(hyphen[2]);
+        }
+        
+        // If it's a full locale code, return it if supported
+        if (muse_is_locale_supported(normalized_input)) {
+            return normalized_input;
+        }
+    }
+    
     // If it's already a full locale code, return it if supported
     if (strchr(language_code, '_') != NULL) {
         return muse_is_locale_supported(language_code) ? language_code : NULL;
     }
     
-    // Find first matching locale for this language
+    // Smart defaults for ambiguous language codes
+    if (strcmp(language_code, "zh") == 0) {
+        return "zh_CN"; // Default to Simplified Chinese (most common)
+    }
+    if (strcmp(language_code, "pt") == 0) {
+        return "pt_BR"; // Default to Brazilian Portuguese (most common)
+    }
+    if (strcmp(language_code, "es") == 0) {
+        return "es_ES"; // Default to Spain Spanish (original)
+    }
+    if (strcmp(language_code, "en") == 0) {
+        return "en_US"; // Default to US English (most common on web)
+    }
+    
+    // Find first matching locale for this language (fallback)
     for (size_t i = 0; i < num_supported_locales; i++) {
         char lang_code[8];
         if (muse_extract_language_code_internal(supported_locales[i].code, lang_code, sizeof(lang_code))) {

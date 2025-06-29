@@ -10,25 +10,44 @@ RewriteEngine On
 # The QSA flag preserves any existing query parameters
 # mod_muse_ai detects the lang parameter and adds translation instructions
 
-# Rule 1: Handle language-prefixed .ai files
+# Enhanced language prefix handling for .ai files
+# Supports both short codes (/es/) and full locale codes (/es-mx/)
+
+# Rule 1: Handle full locale codes with .ai files
+# /es-mx/page.ai -> /page.ai?lang=es-mx
+RewriteRule ^([a-z]{2,3}-[a-z]{2})/(.+\.ai)$ /$2?lang=$1 [L,QSA]
+
+# Rule 2: Handle short language codes with .ai files  
 # /es/page.ai -> /page.ai?lang=es
 RewriteRule ^([a-z]{2,3})/(.+\.ai)$ /$2?lang=$1 [L,QSA]
 
-# Rule 2: Handle language-prefixed directories
+# Rule 3: Handle full locale codes with directories
+# /es-mx/docs/ -> /docs/index.ai?lang=es-mx
+RewriteRule ^([a-z]{2,3}-[a-z]{2})/(.+/)$ /$2index.ai?lang=$1 [L,QSA]
+
+# Rule 4: Handle short language codes with directories
 # /es/docs/ -> /docs/index.ai?lang=es
 RewriteRule ^([a-z]{2,3})/(.+/)$ /$2index.ai?lang=$1 [L,QSA]
 
-# Rule 3: Handle language-prefixed pages without .ai extension
+# Rule 5: Handle full locale codes without .ai extension
+# /es-mx/features -> /features.ai?lang=es-mx
+RewriteRule ^([a-z]{2,3}-[a-z]{2})/([^/]+)$ /$2.ai?lang=$1 [L,QSA]
+
+# Rule 6: Handle short language codes without .ai extension
 # /es/features -> /features.ai?lang=es
 RewriteRule ^([a-z]{2,3})/([^/]+)$ /$2.ai?lang=$1 [L,QSA]
 
-# Rule 4: Handle root language URLs
+# Rule 7: Handle full locale root URLs
+# /es-mx/ -> /index.ai?lang=es-mx
+RewriteRule ^([a-z]{2,3}-[a-z]{2})/?$ /index.ai?lang=$1 [L,QSA]
+
+# Rule 8: Handle short language root URLs
 # /es/ -> /index.ai?lang=es
 RewriteRule ^([a-z]{2,3})/?$ /index.ai?lang=$1 [L,QSA]
 
 # Optional: Add trailing slash to language codes
-# /es -> /es/
-RewriteRule ^([a-z]{2,3})$ /$1/ [R=301,L]
+# /es -> /es/, /es-mx -> /es-mx/
+RewriteRule ^([a-z]{2,3}(-[a-z]{2})?)$ /$1/ [R=301,L]
 
 # Optional: Language switching utility
 # /switch?to=es&return=page.ai -> /es/page.ai
@@ -66,22 +85,31 @@ ErrorDocument 500 /error/server-error.html
     AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript text/xml application/xml
 </IfModule>
 
-# TESTING THE TRANSLATION SYSTEM:
+# TESTING THE ENHANCED TRANSLATION SYSTEM:
 # 1. Create a test .ai file: echo "Create a welcome page" > /var/www/html/test.ai
 # 2. Test English (default): curl http://localhost/test.ai
-# 3. Test Spanish with .ai: curl http://localhost/es/test.ai
-# 4. Test French clean URL: curl http://localhost/fr/test
-# 5. Test German features: curl http://localhost/de/features
-# 6. Check logs: tail -f /var/log/httpd/error_log | grep language_selection
+# 3. Test smart defaults:
+#    curl http://localhost/zh/test     # → zh_CN (Simplified Chinese)
+#    curl http://localhost/pt/test     # → pt_BR (Brazilian Portuguese)
+#    curl http://localhost/es/test     # → es_ES (Spain Spanish)
+#    curl http://localhost/en/test     # → en_US (US English)
+# 4. Test full locale codes:
+#    curl http://localhost/zh-tw/test  # → zh_TW (Traditional Chinese)
+#    curl http://localhost/pt-pt/test  # → pt_PT (European Portuguese)
+#    curl http://localhost/es-mx/test  # → es_MX (Mexican Spanish)
+#    curl http://localhost/en-gb/test  # → en_GB (British English)
+# 5. Check logs: tail -f /var/log/httpd/muse-ai.error_log | grep language
 #
 # Supported languages: 46 languages with quality tiers
 # See docs/pruned-languages.csv for the complete list
 #
 # URL FORMATS SUPPORTED:
-# - With .ai extension: /es/page.ai, /fr/docs/file.ai
-# - Clean URLs (recommended): /es/page, /fr/features, /de/documentation
-# - Directory URLs: /es/docs/, /fr/help/
-# - Root language URLs: /es/, /fr/, /de/
+# - Short codes (smart defaults): /zh/, /pt/, /es/, /en/
+# - Full locale codes: /zh-cn/, /zh-tw/, /pt-br/, /pt-pt/, /es-es/, /es-mx/
+# - With .ai extension: /es/page.ai, /zh-tw/docs/file.ai
+# - Clean URLs (recommended): /es/page, /zh-cn/features, /pt-br/documentation
+# - Directory URLs: /es/docs/, /zh-tw/help/
+# - Root language URLs: /es/, /zh-cn/, /pt-br/
 # - Query params: /page.ai?lang=es, /file.ai?locale=fr_FR
 # - Cookies: muse_lang=es (remembered preferences)
 # - Browser headers: Accept-Language detection
