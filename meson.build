@@ -44,7 +44,8 @@ source_files = [
   'src/metrics.c',
   'src/advanced_config.c',
   'src/request_handlers.c',
-  'src/supported_locales.c'
+  'src/supported_locales.c',
+  'src/language_selection.c'
 ]
 
 # Build the shared module using Meson's native capabilities
