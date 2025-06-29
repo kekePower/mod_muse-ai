@@ -1,6 +1,10 @@
 # .htaccess Configuration for mod_muse-ai Translation System
 # Place this file in your document root as .htaccess
 # Requires mod_rewrite and AllowOverride All or AllowOverride FileInfo
+#
+# IMPORTANT: This configuration includes static asset exclusions to prevent
+# CSS, JavaScript, images, and other static files from being processed by
+# the language rewrite rules. This is essential for proper website functionality.
 
 # Enable URL rewriting
 RewriteEngine On
@@ -9,6 +13,12 @@ RewriteEngine On
 # This converts language-prefixed URLs to query parameters
 # The QSA flag preserves any existing query parameters
 # mod_muse_ai detects the lang parameter and adds translation instructions
+
+# IMPORTANT: Exclude static assets from language rewriting
+# This prevents CSS, JS, images, and other static files from being processed
+# These rules must come BEFORE the language rewrite rules
+RewriteRule ^(css|js|images|img|assets|fonts|media|static)/ - [L]
+RewriteRule \.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|pdf|zip|mp3|mp4|avi)$ - [L]
 
 # Enhanced language prefix handling for .ai files
 # Supports both short codes (/es/) and full locale codes (/es-mx/)
@@ -88,17 +98,18 @@ ErrorDocument 500 /error/server-error.html
 # TESTING THE ENHANCED TRANSLATION SYSTEM:
 # 1. Create a test .ai file: echo "Create a welcome page" > /var/www/html/test.ai
 # 2. Test English (default): curl http://localhost/test.ai
-# 3. Test smart defaults:
+# 3. Test static assets work: curl http://localhost/css/style.css (should return CSS, not 404)
+# 4. Test smart defaults:
 #    curl http://localhost/zh/test     # → zh_CN (Simplified Chinese)
 #    curl http://localhost/pt/test     # → pt_BR (Brazilian Portuguese)
 #    curl http://localhost/es/test     # → es_ES (Spain Spanish)
 #    curl http://localhost/en/test     # → en_US (US English)
-# 4. Test full locale codes:
+# 5. Test full locale codes:
 #    curl http://localhost/zh-tw/test  # → zh_TW (Traditional Chinese)
 #    curl http://localhost/pt-pt/test  # → pt_PT (European Portuguese)
 #    curl http://localhost/es-mx/test  # → es_MX (Mexican Spanish)
 #    curl http://localhost/en-gb/test  # → en_GB (British English)
-# 5. Check logs: tail -f /var/log/httpd/muse-ai.error_log | grep language
+# 6. Check logs: tail -f /var/log/httpd/muse-ai.error_log | grep language
 #
 # Supported languages: 46 languages with quality tiers
 # See docs/pruned-languages.csv for the complete list
