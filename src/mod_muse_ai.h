@@ -35,6 +35,7 @@ typedef struct {
     int last_sent_length;      /* How much have we sent so far? */
     char *pending_buffer;      /* Accumulated content buffer */
     int html_complete;         /* Have we seen </html>? */
+    apr_time_t buffer_start_time; /* When did we start buffering? */
 } streaming_state_t;
 
 /* Function declarations */

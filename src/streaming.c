@@ -11,6 +11,7 @@ streaming_state_t *create_streaming_state(apr_pool_t *pool)
     state->last_sent_length = 0;
     state->pending_buffer = apr_pstrdup(pool, "");
     state->html_complete = 0;
+    state->buffer_start_time = apr_time_now(); /* Start timing when state is created */
     return state;
 }
 
@@ -81,30 +82,26 @@ char *process_streaming_content(request_rec *r, streaming_state_t *state,
     
     /* Phase 1: Look for HTML start if we haven't started streaming yet */
     if (!state->streaming_started) {
-        /* Apply basic sanitization to the buffered content to remove obvious artifacts */
-        char *sanitized_buffer = cleanup_code_fences(r->pool, state->pending_buffer);
-        state->pending_buffer = sanitized_buffer;
+        /* Disable HTML start detection - rely on time-based buffering for proper sanitization */
+        /* int html_start_pos = find_html_start(state->pending_buffer); */
+        /* This is commented out to ensure we buffer content for proper sanitization */
         
-        int html_start_pos = find_html_start(state->pending_buffer);
+        /* Time-based buffering - wait 2 seconds to accumulate content for proper sanitization */
+        apr_time_t current_time = apr_time_now();
+        apr_time_t elapsed = current_time - state->buffer_start_time;
+        apr_time_t buffer_duration = apr_time_from_sec(2); /* 2 seconds */
         
-        if (html_start_pos != -1) {
-            /* Found HTML start! Begin streaming from this position */
-            state->streaming_started = 1;
-            const char *html_content = state->pending_buffer + html_start_pos;
-            state->last_sent_length = strlen(state->pending_buffer);
-            
-            /* Return the HTML content starting from DOCTYPE or <html> */
-            return apr_pstrdup(r->pool, html_content);
-        }
-        
-        /* Check if we have a substantial buffer to decide whether to start streaming */
         int buffer_len = strlen(state->pending_buffer);
         
-        /* Only start streaming if we have enough content or if it looks like non-HTML content */
-        if (buffer_len > 100 || (buffer_len > 0 && !strstr(state->pending_buffer, "```"))) {
+        /* Start streaming if we've buffered for enough time OR if we have substantial content */
+        if (elapsed >= buffer_duration || buffer_len > 1000) {
+            /* Apply comprehensive sanitization to the buffered content before streaming */
+            char *fully_sanitized = cleanup_code_fences(r->pool, state->pending_buffer);
+            state->pending_buffer = fully_sanitized;
+            
             /* Start streaming the sanitized content */
             state->streaming_started = 1;
-            state->last_sent_length = buffer_len;
+            state->last_sent_length = strlen(state->pending_buffer);
             return apr_pstrdup(r->pool, state->pending_buffer);
         }
         
@@ -121,8 +118,12 @@ char *process_streaming_content(request_rec *r, streaming_state_t *state,
         
         if (buffer_len > state->last_sent_length) {
             const char *new_portion = state->pending_buffer + state->last_sent_length;
+            
+            /* Apply sanitization to new portion to handle markdown artifacts in streaming */
+            char *sanitized_portion = cleanup_code_fences(r->pool, new_portion);
+            
             state->last_sent_length = buffer_len;
-            return apr_pstrdup(r->pool, new_portion);
+            return sanitized_portion;
         }
         
         /* No new content to send */
@@ -135,9 +136,12 @@ char *process_streaming_content(request_rec *r, streaming_state_t *state,
         if (html_end_full > state->last_sent_length) {
             /* Extract final portion up to and including </html> */
             int final_len = html_end_full - state->last_sent_length;
-            final_content = apr_palloc(r->pool, final_len + 1);
-            strncpy(final_content, state->pending_buffer + state->last_sent_length, final_len);
-            final_content[final_len] = '\0';
+            char *raw_final = apr_palloc(r->pool, final_len + 1);
+            strncpy(raw_final, state->pending_buffer + state->last_sent_length, final_len);
+            raw_final[final_len] = '\0';
+            
+            /* Apply sanitization to final portion */
+            final_content = cleanup_code_fences(r->pool, raw_final);
         }
         
         /* Mark HTML as complete */
