@@ -2,96 +2,71 @@
 #include <apr_strings.h>
 #include <http_log.h>
 
-/* Create advanced configuration structure */
-advanced_muse_ai_config *create_advanced_muse_ai_config(apr_pool_t *pool, server_rec *s)
+/* Create advanced configuration structure - MINIMAL VERSION FOR DEBUGGING */
+void *create_advanced_muse_ai_config(apr_pool_t *pool, server_rec *s)
 {
     advanced_muse_ai_config *cfg;
     
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s, 
-                "[mod_muse_ai] Creating advanced configuration");
+                "[mod_muse_ai] Creating MINIMAL configuration for debugging");
     
     cfg = apr_pcalloc(pool, sizeof(advanced_muse_ai_config));
     if (!cfg) {
         ap_log_error(APLOG_MARK, APLOG_ERR, 0, s, 
-                    "[mod_muse_ai] Failed to allocate advanced configuration");
+                    "[mod_muse_ai] Failed to allocate configuration");
         return NULL;
     }
     
-    /* Initialize basic configuration */
+    /* Initialize ONLY the most basic fields */
     cfg->endpoint = "http://127.0.0.1:8080/v1";
     cfg->api_key = NULL;
-    cfg->model = "google/gemini-2.5-flash-lite-preview-06-17";
+    cfg->model = "test-model";
     cfg->timeout = 300;
     cfg->debug = 0;
     cfg->streaming = 1;
     
-    /* Initialize Phase 3 advanced features */
-    
-    /* Connection Pooling */
-    cfg->pool_max_connections = 10;
-    cfg->pool_connection_timeout = 300;
-    cfg->pool_idle_timeout = 60;
-    cfg->pool_enable_keepalive = 1;
-    
-    /* Caching */
-    cfg->cache_enable = 0;
-    cfg->cache_ttl_seconds = 300;
-    cfg->cache_max_entries = 1000;
-    cfg->cache_key_prefix = "muse_ai_";
-    
-    /* Rate Limiting */
-    cfg->ratelimit_enable = 0;
-    cfg->ratelimit_requests_per_minute = 60;
-    cfg->ratelimit_burst_size = 10;
+    /* Set all other pointers to NULL to avoid crashes */
+    cfg->reasoning_model_patterns = NULL;
+    cfg->backend_endpoints = NULL;
+    cfg->prompts_dir = NULL;
     cfg->ratelimit_whitelist_ips = NULL;
     
-    /* Performance Monitoring */
-    cfg->metrics_enable = 1;
-    cfg->metrics_endpoint = "/metrics";
-    cfg->metrics_include_request_details = 0;
-    
-    /* Reasoning Models Support */
-    cfg->reasoning_model_patterns = apr_table_make(pool, 10);
-    cfg->reasoning_disable_thinking = 1;
-    
-    /* Advanced Streaming */
-    cfg->streaming_buffer_size = 8192;
-    cfg->streaming_chunk_size = 1024;
-    cfg->streaming_sanitization_enable = 1;
-    
-    /* Security */
-    cfg->security_validate_content_type = 1;
-    cfg->security_max_request_size = 1048576; /* 1MB */
-    cfg->security_allowed_origins = "*";
-    
-    /* Load Balancing */
-    cfg->backend_endpoints = apr_array_make(pool, 5, sizeof(backend_endpoint_t));
-    cfg->load_balance_method = "round_robin";
-    cfg->health_check_interval = 30;
-    
-    /* Timeouts and Retries */
-    cfg->connect_timeout = 10;
-    cfg->read_timeout = 300;
-    cfg->write_timeout = 30;
-    cfg->max_retries = 3;
-    cfg->retry_delay_ms = 1000;
-    
-    /* Add default reasoning model patterns */
-    apr_table_set(cfg->reasoning_model_patterns, "deepseek-r1", "1");
-    apr_table_set(cfg->reasoning_model_patterns, "deepseek", "1");
-    apr_table_set(cfg->reasoning_model_patterns, "gemini-2.5-flash", "1");
-    apr_table_set(cfg->reasoning_model_patterns, "qwen", "1");
-    
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s, 
-                "[mod_muse_ai] Advanced configuration created successfully");
+                "[mod_muse_ai] Minimal configuration created successfully");
     
     return cfg;
+}
+
+void *merge_advanced_muse_ai_config(apr_pool_t *p, void *base_conf, void *new_conf)
+{
+    advanced_muse_ai_config *base = base_conf;
+    advanced_muse_ai_config *new = new_conf;
+    advanced_muse_ai_config *merged = apr_pcalloc(p, sizeof(advanced_muse_ai_config));
+
+    // MINIMAL merge function for debugging - only basic fields
+
+    // Basic settings only
+    merged->endpoint = new->endpoint ? new->endpoint : base->endpoint;
+    merged->api_key = new->api_key ? new->api_key : base->api_key;
+    merged->model = new->model ? new->model : base->model;
+    merged->timeout = (new->timeout != 300) ? new->timeout : base->timeout;
+    merged->debug = new->debug;
+    merged->streaming = new->streaming;
+
+    // Set all complex fields to NULL to avoid crashes
+    merged->reasoning_model_patterns = NULL;
+    merged->backend_endpoints = NULL;
+    merged->prompts_dir = NULL;
+    merged->ratelimit_whitelist_ips = NULL;
+
+    return merged;
 }
 
 /* Configuration directive handlers */
 
 const char *set_pool_max_connections(cmd_parms *cmd, void *cfg, const char *arg)
 {
+    (void)cfg;
     extern module muse_ai_module;
     advanced_muse_ai_config *config = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
     int value = atoi(arg);
@@ -106,6 +81,7 @@ const char *set_pool_max_connections(cmd_parms *cmd, void *cfg, const char *arg)
 
 const char *set_cache_enable(cmd_parms *cmd, void *cfg, const char *arg)
 {
+    (void)cfg;
     extern module muse_ai_module;
     advanced_muse_ai_config *config = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
     
@@ -122,6 +98,7 @@ const char *set_cache_enable(cmd_parms *cmd, void *cfg, const char *arg)
 
 const char *set_cache_ttl(cmd_parms *cmd, void *cfg, const char *arg)
 {
+    (void)cfg;
     extern module muse_ai_module;
     advanced_muse_ai_config *config = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
     int value = atoi(arg);
@@ -136,6 +113,7 @@ const char *set_cache_ttl(cmd_parms *cmd, void *cfg, const char *arg)
 
 const char *set_ratelimit_enable(cmd_parms *cmd, void *cfg, const char *arg)
 {
+    (void)cfg;
     extern module muse_ai_module;
     advanced_muse_ai_config *config = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
     
@@ -152,6 +130,7 @@ const char *set_ratelimit_enable(cmd_parms *cmd, void *cfg, const char *arg)
 
 const char *set_ratelimit_rpm(cmd_parms *cmd, void *cfg, const char *arg)
 {
+    (void)cfg;
     extern module muse_ai_module;
     advanced_muse_ai_config *config = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
     int value = atoi(arg);
@@ -166,6 +145,7 @@ const char *set_ratelimit_rpm(cmd_parms *cmd, void *cfg, const char *arg)
 
 const char *set_metrics_enable(cmd_parms *cmd, void *cfg, const char *arg)
 {
+    (void)cfg;
     extern module muse_ai_module;
     advanced_muse_ai_config *config = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
     
@@ -182,6 +162,7 @@ const char *set_metrics_enable(cmd_parms *cmd, void *cfg, const char *arg)
 
 const char *set_reasoning_model_pattern(cmd_parms *cmd, void *cfg, const char *pattern)
 {
+    (void)cfg;
     extern module muse_ai_module;
     advanced_muse_ai_config *config = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
     
@@ -195,29 +176,53 @@ const char *set_reasoning_model_pattern(cmd_parms *cmd, void *cfg, const char *p
 
 const char *set_backend_endpoint(cmd_parms *cmd, void *cfg, const char *endpoint)
 {
-    extern module muse_ai_module;
-    advanced_muse_ai_config *config = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
-    backend_endpoint_t *backend;
-    
+    advanced_muse_ai_config *config = (advanced_muse_ai_config *)cfg;
+    backend_endpoint_t *new_endpoint;
+
     if (!endpoint || strlen(endpoint) == 0) {
-        return "MuseAiBackendEndpoint requires a URL";
+        return "MuseAiBackendEndpoint requires a non-empty URL string.";
     }
-    
-    backend = (backend_endpoint_t *)apr_array_push(config->backend_endpoints);
-    backend->url = apr_pstrdup(cmd->pool, endpoint);
-    backend->api_key = NULL;
-    backend->weight = 1;
-    backend->active_connections = 0;
-    backend->total_requests = 0;
-    backend->failed_requests = 0;
-    backend->last_health_check = 0;
-    backend->healthy = 1;
-    
+
+    // Initialize backend_endpoints array if it's NULL (minimal config)
+    if (!config->backend_endpoints) {
+        config->backend_endpoints = apr_array_make(cmd->pool, 5, sizeof(backend_endpoint_t));
+        if (!config->backend_endpoints) {
+            return "Failed to initialize backend endpoints array.";
+        }
+    }
+
+    // If this is the first backend endpoint being added, set it as the primary endpoint.
+    if (config->backend_endpoints->nelts == 0) {
+        config->endpoint = apr_pstrdup(cmd->pool, endpoint);
+        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, cmd->server, 
+                     "[mod_muse_ai] Primary backend endpoint set to: %s", config->endpoint);
+    }
+
+    // Add the new endpoint to the list for load balancing.
+    new_endpoint = (backend_endpoint_t *)apr_array_push(config->backend_endpoints);
+    if (!new_endpoint) {
+        return "Failed to allocate memory for new backend endpoint.";
+    }
+
+    new_endpoint->url = apr_pstrdup(cmd->pool, endpoint);
+    new_endpoint->api_key = NULL; // API key can be set per-endpoint later if needed
+    new_endpoint->weight = 1;
+    new_endpoint->active_connections = 0;
+    new_endpoint->total_requests = 0;
+    new_endpoint->failed_requests = 0;
+    new_endpoint->last_health_check = 0;
+    new_endpoint->healthy = 1; // Assume healthy until a check fails
+
+    ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, cmd->server, 
+                 "[mod_muse_ai] Added backend endpoint for load balancing: %s", new_endpoint->url);
+
+    return NULL;
     return NULL;
 }
 
 const char *set_load_balance_method(cmd_parms *cmd, void *cfg, const char *method)
 {
+    (void)cfg;
     extern module muse_ai_module;
     advanced_muse_ai_config *config = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
     
@@ -233,6 +238,7 @@ const char *set_load_balance_method(cmd_parms *cmd, void *cfg, const char *metho
 
 const char *set_streaming_buffer_size(cmd_parms *cmd, void *cfg, const char *arg)
 {
+    (void)cfg;
     extern module muse_ai_module;
     advanced_muse_ai_config *config = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
     int value = atoi(arg);
@@ -247,6 +253,7 @@ const char *set_streaming_buffer_size(cmd_parms *cmd, void *cfg, const char *arg
 
 const char *set_security_max_request_size(cmd_parms *cmd, void *cfg, const char *arg)
 {
+    (void)cfg;
     extern module muse_ai_module;
     advanced_muse_ai_config *config = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
     int value = atoi(arg);
@@ -259,7 +266,123 @@ const char *set_security_max_request_size(cmd_parms *cmd, void *cfg, const char 
     return NULL;
 }
 
+const char *set_muse_ai_prompts_dir(cmd_parms *cmd, void *cfg, const char *arg)
+{
+    (void)cfg;
+    extern module muse_ai_module;
+    advanced_muse_ai_config *config = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
+    
+    if (!arg || strlen(arg) == 0) {
+        return "MuseAiPromptsDir requires a directory path";
+    }
+    
+    config->prompts_dir = apr_pstrdup(cmd->pool, arg);
+    return NULL;
+}
+
+const char *set_muse_ai_prompts_minify(cmd_parms *cmd, void *cfg, const char *arg)
+{
+    (void)cfg;
+    extern module muse_ai_module;
+    advanced_muse_ai_config *config = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
+    
+    if (strcasecmp(arg, "on") == 0 || strcasecmp(arg, "yes") == 0 || strcasecmp(arg, "1") == 0) {
+        config->prompts_minify = 1;
+    } else if (strcasecmp(arg, "off") == 0 || strcasecmp(arg, "no") == 0 || strcasecmp(arg, "0") == 0) {
+        config->prompts_minify = 0;
+    } else {
+        return "MuseAiPromptsMinify must be On or Off";
+    }
+    
+    return NULL;
+}
+
 /* Configuration validation */
+const char *set_muse_ai_endpoint(cmd_parms *cmd, void *dcfg, const char *arg)
+{
+    (void)dcfg;
+    extern module muse_ai_module;
+    advanced_muse_ai_config *cfg = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
+    cfg->endpoint = apr_pstrdup(cmd->pool, arg);
+    return NULL;
+}
+
+const char *set_muse_ai_api_key(cmd_parms *cmd, void *dcfg, const char *arg)
+{
+    (void)dcfg;
+    extern module muse_ai_module;
+    advanced_muse_ai_config *cfg = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
+    cfg->api_key = apr_pstrdup(cmd->pool, arg);
+    return NULL;
+}
+
+const char *set_muse_ai_model(cmd_parms *cmd, void *dcfg, const char *arg)
+{
+    (void)dcfg;
+    extern module muse_ai_module;
+    advanced_muse_ai_config *cfg = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
+    cfg->model = apr_pstrdup(cmd->pool, arg);
+    return NULL;
+}
+
+const char *set_muse_ai_timeout(cmd_parms *cmd, void *dcfg, const char *arg)
+{
+    (void)dcfg;
+    extern module muse_ai_module;
+    advanced_muse_ai_config *cfg = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
+    cfg->timeout = atoi(arg);
+    return NULL;
+}
+
+const char *set_muse_ai_debug(cmd_parms *cmd, void *dcfg, const char *arg)
+{
+    (void)dcfg;
+    extern module muse_ai_module;
+    advanced_muse_ai_config *cfg = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
+    if (strcasecmp(arg, "on") == 0 || strcasecmp(arg, "yes") == 0 || strcasecmp(arg, "1") == 0) {
+        cfg->debug = 1;
+    } else {
+        cfg->debug = 0;
+    }
+    return NULL;
+}
+
+const char *set_muse_ai_streaming(cmd_parms *cmd, void *dcfg, const char *arg)
+{
+    (void)dcfg;
+    extern module muse_ai_module;
+    advanced_muse_ai_config *cfg = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
+    if (strcasecmp(arg, "on") == 0 || strcasecmp(arg, "yes") == 0 || strcasecmp(arg, "1") == 0) {
+        cfg->streaming = 1;
+    } else {
+        cfg->streaming = 0;
+    }
+    return NULL;
+}
+
+const command_rec muse_ai_advanced_cmds[] = {
+    AP_INIT_TAKE1("MuseAiEndpoint", set_muse_ai_endpoint, NULL, RSRC_CONF, "The endpoint URL for the MuseWeb AI service"),
+    AP_INIT_TAKE1("MuseAiApiKey", set_muse_ai_api_key, NULL, RSRC_CONF, "The API key for commercial AI providers"),
+    AP_INIT_TAKE1("MuseAiModel", set_muse_ai_model, NULL, RSRC_CONF, "The AI model to use for generation"),
+    AP_INIT_TAKE1("MuseAiTimeout", set_muse_ai_timeout, NULL, RSRC_CONF, "Timeout in seconds for the backend connection"),
+    AP_INIT_TAKE1("MuseAiDebug", set_muse_ai_debug, NULL, RSRC_CONF, "Enable debug logging (On/Off)"),
+    AP_INIT_TAKE1("MuseAiStreaming", set_muse_ai_streaming, NULL, RSRC_CONF, "Enable streaming responses (On/Off)"),
+    AP_INIT_TAKE1("MuseAiPoolMaxConnections", set_pool_max_connections, NULL, RSRC_CONF, "Maximum number of connections in the pool"),
+    AP_INIT_TAKE1("MuseAiCacheEnable", set_cache_enable, NULL, RSRC_CONF, "Enable response caching (On/Off)"),
+    AP_INIT_TAKE1("MuseAiCacheTTL", set_cache_ttl, NULL, RSRC_CONF, "Cache time-to-live in seconds"),
+    AP_INIT_TAKE1("MuseAiRateLimitEnable", set_ratelimit_enable, NULL, RSRC_CONF, "Enable rate limiting (On/Off)"),
+    AP_INIT_TAKE1("MuseAiRateLimitRPM", set_ratelimit_rpm, NULL, RSRC_CONF, "Rate limit in requests per minute"),
+    AP_INIT_TAKE1("MuseAiMetricsEnable", set_metrics_enable, NULL, RSRC_CONF, "Enable performance metrics (On/Off)"),
+    AP_INIT_TAKE1("MuseAiReasoningModelPattern", set_reasoning_model_pattern, NULL, RSRC_CONF, "Regex pattern to identify a reasoning model"),
+    AP_INIT_TAKE1("MuseAiBackendEndpoint", set_backend_endpoint, NULL, RSRC_CONF, "Define a backend endpoint for load balancing"),
+    AP_INIT_TAKE1("MuseAiLoadBalanceMethod", set_load_balance_method, NULL, RSRC_CONF, "Load balancing method (round_robin, least_connections, random)"),
+    AP_INIT_TAKE1("MuseAiStreamingBufferSize", set_streaming_buffer_size, NULL, RSRC_CONF, "Streaming buffer size in bytes"),
+    AP_INIT_TAKE1("MuseAiSecurityMaxRequestSize", set_security_max_request_size, NULL, RSRC_CONF, "Maximum allowed request body size in bytes"),
+    AP_INIT_TAKE1("MuseAiPromptsDir", set_muse_ai_prompts_dir, NULL, RSRC_CONF, "Directory for prompt files"),
+    AP_INIT_TAKE1("MuseAiPromptsMinify", set_muse_ai_prompts_minify, NULL, RSRC_CONF, "Enable minified layout for prompts (On/Off)"),
+    {NULL}
+};
+
 int validate_advanced_config(advanced_muse_ai_config *cfg, server_rec *s)
 {
     if (!cfg) {

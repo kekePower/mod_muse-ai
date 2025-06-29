@@ -12,70 +12,55 @@ project('mod_muse-ai', 'c',
 apxs = find_program('apxs', required : true)
 
 # Get Apache configuration
-apache_cflags = run_command(apxs, '-q', 'CFLAGS', check : true).stdout().strip()
-apache_includes = run_command(apxs, '-q', 'INCLUDEDIR', check : true).stdout().strip()
-apache_libexec = run_command(apxs, '-q', 'LIBEXECDIR', check : true).stdout().strip()
+apache_cflags_str = run_command(apxs, '-q', 'CFLAGS', check: true).stdout().strip()
+apache_ldflags_str = run_command(apxs, '-q', 'LDFLAGS_SHLIB', check: true).stdout().strip()
+apache_libs_str = run_command(apxs, '-q', 'LIBS_SHLIB', check: true).stdout().strip()
+apache_libexec = run_command(apxs, '-q', 'LIBEXECDIR', check: true).stdout().strip()
 
-# Parse Apache CFLAGS to get include directories
-apache_include_args = []
-foreach flag : apache_cflags.split()
-  if flag.startswith('-I')
-    apache_include_args += flag
-  endif
-endforeach
+# Create a dependency object for Apache
+cc = meson.get_compiler('c')
+apache_dep = declare_dependency(
+  include_directories: [
+    include_directories('/usr/include/httpd'),
+    include_directories('/usr/include/apr-1')
+  ],
+    compile_args: apache_cflags_str.split() + ['-D_REENTRANT', '-D_GNU_SOURCE'],
+  link_args: apache_ldflags_str.split() + apache_libs_str.split()
+)
 
-# Add the main Apache include directory
-apache_include_args += '-I' + apache_includes
+# Find cJSON dependency
+cjson_dep = dependency('libcjson', required: true)
 
-message('Apache include arguments: ' + ' '.join(apache_include_args))
 message('Apache module directory: ' + apache_libexec)
 
-# Define all source files for the modular build
-modular_source_files = [
-  'src/mod_muse_ai_main.c',
+# Define all C source files
+source_files = [
+  'src/mod_muse_ai.c',
   'src/streaming.c',
-  'src/sanitize.c', 
+  'src/sanitize.c',
   'src/http_client.c',
   'src/utils.c',
   'src/connection_pool.c',
   'src/metrics.c',
   'src/advanced_config.c',
-  'src/phase3_integration.c',
-  'src/mod_muse_ai.h',
-  'src/connection_pool.h',
-  'src/advanced_config.h',
-  'src/advanced_streaming.h'
-] # Pass header to trigger rebuilds on change
+  'src/phase3_integration.c'
+]
 
-# Custom target to build the Apache module
-mod_muse_ai_so = custom_target('mod_muse_ai.so',
-  input: modular_source_files,
-  output: 'mod_muse_ai.so',
-  command: [
-    meson.current_source_dir() / 'scripts' / 'build_modular.sh',
-    '@OUTDIR@',
-    apxs.full_path(),
-    '@INPUT@'
-  ],
-  build_by_default: true
+# Build the shared module using Meson's native capabilities
+mod_muse_ai_so = shared_module('muse_ai',
+  source_files,
+  include_directories: include_directories('src'),
+  dependencies: [apache_dep, cjson_dep],
+  name_prefix: 'mod_',
+  name_suffix: 'so',
+  install: true,
+  install_dir: apache_libexec
 )
 
-# Custom install target
-# Write the install script
-install_script_file = configure_file(
-  input : 'install_template.sh.in',
-  output : 'install_module.sh',
-  configuration : {
-    'APXS': apxs.full_path(),
-    'MODULE_SO': meson.current_build_dir() / 'mod_muse_ai.so',
-    'APACHE_LIBEXEC': apache_libexec
-  }
-)
-
-# Make the script executable and create install target
+# Custom target to simplify installation during development
 run_target('install-module',
-  command : ['bash', meson.current_build_dir() / 'install_module.sh'],
-  depends : mod_muse_ai_so
+  command: ['ninja', '-C', meson.build_root(), 'install'],
+  depends: mod_muse_ai_so
 )
 
 # Development targets

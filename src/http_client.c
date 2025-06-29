@@ -343,14 +343,20 @@ int make_backend_request(request_rec *r, muse_ai_config *cfg,
                      "mod_muse_ai: Sending request headers");
     }
     
-    /* Send request */
-    apr_size_t send_len = strlen(request_headers);
-    rv = apr_socket_send(sock, request_headers, &send_len);
-    if (rv != APR_SUCCESS) {
-        ap_log_rerror(APLOG_MARK, APLOG_ERR, rv, r,
-                     "mod_muse_ai: Failed to send request");
-        apr_socket_close(sock);
-        return HTTP_INTERNAL_SERVER_ERROR;
+    /* Send request robustly in a loop */
+    apr_size_t request_len = strlen(request_headers);
+    const char *p = request_headers;
+    while (request_len > 0) {
+        apr_size_t sent_len = request_len;
+        rv = apr_socket_send(sock, p, &sent_len);
+        if (rv != APR_SUCCESS) {
+            ap_log_rerror(APLOG_MARK, APLOG_ERR, rv, r,
+                         "mod_muse_ai: Failed to send request");
+            apr_socket_close(sock);
+            return HTTP_INTERNAL_SERVER_ERROR;
+        }
+        p += sent_len;
+        request_len -= sent_len;
     }
     
     /* Handle response based on streaming configuration */

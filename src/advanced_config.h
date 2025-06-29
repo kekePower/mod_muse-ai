@@ -66,6 +66,11 @@ typedef struct advanced_muse_ai_config {
     int write_timeout;
     int max_retries;
     int retry_delay_ms;
+
+    /* Prompts Directory Configuration */
+    char *prompts_dir; /* Path to the prompts directory */
+    int prompts_minify; /* Flag to use minified layout */
+    int phase3_initialized; /* Flag to check if phase 3 features are initialized */
     
 } advanced_muse_ai_config;
 
@@ -111,7 +116,9 @@ typedef struct muse_ai_metrics {
 } muse_ai_metrics_t;
 
 /* Function declarations */
-advanced_muse_ai_config *create_advanced_muse_ai_config(apr_pool_t *pool, server_rec *s);
+void *create_advanced_muse_ai_config(apr_pool_t *pool, server_rec *s);
+void *merge_advanced_muse_ai_config(apr_pool_t *p, void *base_conf, void *new_conf);
+extern const command_rec muse_ai_advanced_cmds[];
 const char *set_pool_max_connections(cmd_parms *cmd, void *cfg, const char *arg);
 const char *set_cache_enable(cmd_parms *cmd, void *cfg, const char *arg);
 const char *set_cache_ttl(cmd_parms *cmd, void *cfg, const char *arg);
@@ -123,6 +130,8 @@ const char *set_backend_endpoint(cmd_parms *cmd, void *cfg, const char *endpoint
 const char *set_load_balance_method(cmd_parms *cmd, void *cfg, const char *method);
 const char *set_streaming_buffer_size(cmd_parms *cmd, void *cfg, const char *arg);
 const char *set_security_max_request_size(cmd_parms *cmd, void *cfg, const char *arg);
+const char *set_muse_ai_prompts_dir(cmd_parms *cmd, void *cfg, const char *arg);
+const char *set_muse_ai_prompts_minify(cmd_parms *cmd, void *cfg, const char *arg);
 
 /* Metrics functions */
 muse_ai_metrics_t *get_global_metrics(void);

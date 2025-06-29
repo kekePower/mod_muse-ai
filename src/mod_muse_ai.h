@@ -8,6 +8,7 @@
 #include "ap_config.h"
 #include "apr_strings.h"
 #include "apr_network_io.h"
+#include "apr_file_io.h"
 #include "apr_uri.h"
 
 /* Module configuration structure */
@@ -46,9 +47,7 @@ const char *set_muse_ai_model(cmd_parms *cmd, void *cfg, const char *arg);
 const char *set_muse_ai_api_key(cmd_parms *cmd, void *cfg, const char *arg);
 const char *set_muse_ai_streaming(cmd_parms *cmd, void *cfg, int flag);
 
-/* Main handlers */
-int muse_ai_handler(request_rec *r);
-int forward_to_museweb(request_rec *r, muse_ai_config *cfg);
+
 
 /* HTTP client functions */
 int make_backend_request(request_rec *r, muse_ai_config *cfg, 
@@ -69,6 +68,7 @@ char *sanitize_response(apr_pool_t *pool, const char *content);
 char *extract_html_content(apr_pool_t *pool, const char *content);
 
 /* Utility functions */
+char *read_file_contents(apr_pool_t *pool, const char *file_path);
 char *url_decode(apr_pool_t *pool, const char *encoded);
 char *escape_json_string(apr_pool_t *pool, const char *str);
 
