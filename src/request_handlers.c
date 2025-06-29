@@ -1,9 +1,11 @@
 #include "mod_muse_ai.h"
+#include "request_handlers.h"
 #include "http_protocol.h"
 #include "connection_pool.h"
 #include "advanced_config.h"
 #include <apr_time.h>
 #include "cJSON.h"
+#include "http_core.h"
 
 /* Forward declarations for metrics functions */
 int init_metrics_system(apr_pool_t *pool, server_rec *s);
@@ -76,9 +78,142 @@ int init_phase3_features(apr_pool_t *pool, server_rec *s, advanced_muse_ai_confi
     return 0;
 }
 
+/* AI file handler for .ai files in document root */
+int ai_file_handler(request_rec *r)
+{
+    advanced_muse_ai_config *cfg;
+    char *ai_file_path = NULL;
+    char *system_prompt = NULL;
+    char *layout_prompt = NULL;
+    char *page_prompt = NULL;
+    char *json_payload = NULL;
+    char *final_system_prompt = NULL;
+    
+    ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] AI file handler called for URI: %s", r->uri);
+    
+    /* Only handle GET requests for .ai files */
+    if (r->method_number != M_GET) {
+        return HTTP_METHOD_NOT_ALLOWED;
+    }
+    
+    /* Get configuration */
+    cfg = (advanced_muse_ai_config *)ap_get_module_config(r->server->module_config, &muse_ai_module);
+    if (!cfg) {
+        ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r, "[mod_muse_ai] Failed to get configuration");
+        return HTTP_INTERNAL_SERVER_ERROR;
+    }
+    
+    /* Construct path to .ai file using Apache's filename translation */
+    /* Apache translates URIs to filenames automatically in r->filename */
+    ai_file_path = r->filename;
+    
+    /* If r->filename is not set, construct it manually using server document root */
+    if (!ai_file_path) {
+        core_server_config *core_cfg = ap_get_core_module_config(r->server->module_config);
+        if (core_cfg && core_cfg->ap_document_root) {
+            ai_file_path = apr_pstrcat(r->pool, core_cfg->ap_document_root, r->uri, NULL);
+        } else {
+            ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r, "[mod_muse_ai] Could not determine document root");
+            return HTTP_INTERNAL_SERVER_ERROR;
+        }
+    }
+    
+    ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] Looking for AI file: %s", ai_file_path);
+    ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] Prompts directory configured as: %s", cfg->prompts_dir ? cfg->prompts_dir : "(NULL)");
+    
+    /* Read the page-specific .ai file */
+    page_prompt = read_file_contents(r->pool, ai_file_path);
+    if (!page_prompt) {
+        ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r, "[mod_muse_ai] Could not read AI file: %s", ai_file_path);
+        return HTTP_NOT_FOUND;
+    }
+    
+    /* Read system prompts from MuseAiPromptsDir if configured */
+    if (cfg->prompts_dir && strlen(cfg->prompts_dir) > 0) {
+        char *system_prompt_path = apr_pstrcat(r->pool, cfg->prompts_dir, "/system_prompt.ai", NULL);
+        system_prompt = read_file_contents(r->pool, system_prompt_path);
+        
+        if (system_prompt) {
+            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] Loaded system prompt from: %s", system_prompt_path);
+            
+            /* Read layout prompt */
+            const char *layout_filename = cfg->prompts_minify ? "/layout.min.ai" : "/layout.ai";
+            char *layout_prompt_path = apr_pstrcat(r->pool, cfg->prompts_dir, layout_filename, NULL);
+            layout_prompt = read_file_contents(r->pool, layout_prompt_path);
+            
+            if (layout_prompt) {
+                ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] Loaded layout prompt from: %s", layout_prompt_path);
+                final_system_prompt = apr_pstrcat(r->pool, system_prompt, "\n\n", layout_prompt, NULL);
+            } else {
+                final_system_prompt = system_prompt;
+            }
+        } else {
+            ap_log_rerror(APLOG_MARK, APLOG_NOTICE, 0, r, "[mod_muse_ai] Could not load system prompt from: %s", system_prompt_path);
+        }
+    }
+    
+    /* Create JSON payload */
+    if (final_system_prompt) {
+        /* Both system and user content */
+        char *escaped_system = escape_json_string(r->pool, final_system_prompt);
+        char *escaped_user = escape_json_string(r->pool, page_prompt);
+        json_payload = apr_psprintf(r->pool, 
+            "{\n"
+            "  \"model\": \"%s\",\n"
+            "  \"messages\": [\n"
+            "    {\"role\": \"system\", \"content\": \"%s\"},\n"
+            "    {\"role\": \"user\", \"content\": \"%s\"}\n"
+            "  ],\n"
+            "  \"stream\": %s\n"
+            "}",
+            cfg->model ? cfg->model : "default",
+            escaped_system,
+            escaped_user,
+            cfg->streaming ? "true" : "false");
+    } else {
+        /* Only user content */
+        char *escaped_user = escape_json_string(r->pool, page_prompt);
+        json_payload = apr_psprintf(r->pool,
+            "{\n"
+            "  \"model\": \"%s\",\n"
+            "  \"messages\": [\n"
+            "    {\"role\": \"user\", \"content\": \"%s\"}\n"
+            "  ],\n"
+            "  \"stream\": %s\n"
+            "}",
+            cfg->model ? cfg->model : "default",
+            escaped_user,
+            cfg->streaming ? "true" : "false");
+    }
+    
+    ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] Generated JSON payload for AI file request");
+    
+    /* Create basic config structure for backend request */
+    muse_ai_config basic_cfg = {
+        .endpoint = cfg->endpoint,
+        .timeout = cfg->timeout,
+        .debug = cfg->debug,
+        .model = cfg->model,
+        .api_key = cfg->api_key,
+        .streaming = cfg->streaming
+    };
+    
+    /* Forward to backend */
+    char *response_body = NULL;
+    int status = make_backend_request(r, &basic_cfg, cfg->endpoint, json_payload, &response_body);
+    
+    return status;
+}
+
 /* Enhanced request handler with Phase 3 features */
 int enhanced_muse_ai_handler(request_rec *r)
 {
+    /* Check if this is a .ai file request */
+    if (r->uri && strlen(r->uri) > 3 && strcmp(r->uri + strlen(r->uri) - 3, ".ai") == 0) {
+        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] Detected .ai file request, routing to ai_file_handler");
+        return ai_file_handler(r);
+    }
+    
     /* We only handle requests for /ai */
     if (strcmp(r->uri, "/ai") != 0) {
         return DECLINED;
@@ -104,6 +239,8 @@ int enhanced_muse_ai_handler(request_rec *r)
     }
 
     ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] HANDLER USING ENDPOINT: %s", cfg->endpoint ? cfg->endpoint : "(not set)");
+    ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] HANDLER CONFIG: timeout=%d, debug=%d, api_key=%s", 
+                 cfg->timeout, cfg->debug, cfg->api_key ? "(set)" : "(not set)");
 
     /* Security validation */
     if (cfg->security_validate_content_type && r->method_number == M_POST) {
@@ -251,7 +388,23 @@ int enhanced_muse_ai_handler(request_rec *r)
     }
 
     char *response_body = NULL;
-    int status = make_backend_request(r, (muse_ai_config *)cfg, cfg->endpoint, json_payload, &response_body);
+    
+    /* Create temporary basic config from advanced config */
+    muse_ai_config basic_cfg = {
+        .endpoint = cfg->endpoint,
+        .timeout = cfg->timeout,
+        .debug = cfg->debug,
+        .model = cfg->model,
+        .api_key = cfg->api_key,
+        .streaming = cfg->streaming
+    };
+    
+    if (cfg->debug) {
+        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] BASIC CONFIG: timeout=%d, debug=%d", 
+                     basic_cfg.timeout, basic_cfg.debug);
+    }
+    
+    int status = make_backend_request(r, &basic_cfg, cfg->endpoint, json_payload, &response_body);
     
     /* Calculate response time */
     end_time = apr_time_now();

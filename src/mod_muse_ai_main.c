@@ -1,6 +1,6 @@
 #include "mod_muse_ai.h"
 #include "advanced_config.h"
-#include "phase3_integration.h"
+#include "request_handlers.h"
 
 /* Module configuration directives */
 static const command_rec muse_ai_directives[] = {
@@ -120,6 +120,12 @@ static int muse_ai_handler(request_rec *r)
     ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
                   "[mod_muse_ai] Router received request for URI: %s", r->uri);
 
+    /* Check for .ai file requests first */
+    if (r->uri && strlen(r->uri) > 3 && strcmp(r->uri + strlen(r->uri) - 3, ".ai") == 0) {
+        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] Dispatching to enhanced_muse_ai_handler for .ai file: %s", r->uri);
+        return enhanced_muse_ai_handler(r);
+    }
+    
     if (strcmp(r->uri, "/ai") == 0) {
         ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] Dispatching to enhanced_muse_ai_handler for /ai");
         return enhanced_muse_ai_handler(r);

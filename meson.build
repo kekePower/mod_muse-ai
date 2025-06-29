@@ -43,7 +43,7 @@ source_files = [
   'src/connection_pool.c',
   'src/metrics.c',
   'src/advanced_config.c',
-  'src/phase3_integration.c'
+  'src/request_handlers.c'
 ]
 
 # Build the shared module using Meson's native capabilities
@@ -59,7 +59,7 @@ mod_muse_ai_so = shared_module('muse_ai',
 
 # Custom target to simplify installation during development
 run_target('install-module',
-  command: ['ninja', '-C', meson.build_root(), 'install'],
+  command: ['ninja', '-C', meson.project_build_root(), 'install'],
   depends: mod_muse_ai_so
 )
 

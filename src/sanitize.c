@@ -2,102 +2,263 @@
 #include <string.h>
 #include <ctype.h>
 
-/* Remove markdown code fences and cleanup content */
+/* Helper function to replace all occurrences of a substring */
+static char *str_replace_all(apr_pool_t *pool, const char *str, const char *old, const char *new)
+{
+    if (!str || !old) return apr_pstrdup(pool, str ? str : "");
+    
+    const char *pos = str;
+    char *result = apr_pstrdup(pool, "");
+    
+    while ((pos = strstr(pos, old)) != NULL) {
+        /* Add everything before the match */
+        int before_len = pos - str;
+        char *before = apr_palloc(pool, before_len + 1);
+        strncpy(before, str, before_len);
+        before[before_len] = '\0';
+        
+        result = apr_pstrcat(pool, result, before, new, NULL);
+        
+        /* Move past the old substring */
+        str = pos + strlen(old);
+        pos = str;
+    }
+    
+    /* Add any remaining part */
+    result = apr_pstrcat(pool, result, str, NULL);
+    return result;
+}
+
+/* Helper function to trim whitespace from both ends */
+static char *trim_whitespace(apr_pool_t *pool, const char *str)
+{
+    if (!str) return apr_pstrdup(pool, "");
+    
+    /* Find start of non-whitespace */
+    const char *start = str;
+    while (*start && isspace(*start)) {
+        start++;
+    }
+    
+    /* Find end of non-whitespace */
+    const char *end = str + strlen(str) - 1;
+    while (end > start && isspace(*end)) {
+        end--;
+    }
+    
+    /* Extract trimmed string */
+    int len = end - start + 1;
+    char *trimmed = apr_palloc(pool, len + 1);
+    strncpy(trimmed, start, len);
+    trimmed[len] = '\0';
+    
+    return trimmed;
+}
+
+/* Helper function to check if string ends with suffix */
+static int str_ends_with(const char *str, const char *suffix)
+{
+    if (!str || !suffix) return 0;
+    
+    int str_len = strlen(str);
+    int suffix_len = strlen(suffix);
+    
+    if (suffix_len > str_len) return 0;
+    
+    return strcmp(str + str_len - suffix_len, suffix) == 0;
+}
+
+/* Custom case-insensitive string search for portability */
+static char *str_case_str(const char *haystack, const char *needle)
+{
+    if (!haystack || !needle) return NULL;
+    
+    int needle_len = strlen(needle);
+    if (needle_len == 0) return (char *)haystack;
+    
+    for (const char *p = haystack; *p; p++) {
+        if (strncasecmp(p, needle, needle_len) == 0) {
+            return (char *)p;
+        }
+    }
+    
+    return NULL;
+}
+
+/* Remove thinking tags and their content (for reasoning models) */
+static char *remove_thinking_tags(apr_pool_t *pool, const char *content)
+{
+    if (!content) return apr_pstrdup(pool, "");
+    
+    char *output = apr_pstrdup(pool, content);
+    
+    /* Remove <think>...</think> tags (case insensitive) */
+    char *think_start;
+    while ((think_start = str_case_str(output, "<think>")) != NULL) {
+        char *think_end = str_case_str(think_start, "</think>");
+        if (think_end) {
+            /* Remove everything from <think> to </think> */
+            char *before = apr_palloc(pool, think_start - output + 1);
+            strncpy(before, output, think_start - output);
+            before[think_start - output] = '\0';
+            
+            char *after = think_end + strlen("</think>");
+            output = apr_pstrcat(pool, before, after, NULL);
+        } else {
+            /* No closing tag, remove from <think> to end */
+            char *before = apr_palloc(pool, think_start - output + 1);
+            strncpy(before, output, think_start - output);
+            before[think_start - output] = '\0';
+            output = before;
+            break;
+        }
+    }
+    
+    /* Remove plain text thinking tags (Qwen3 style) */
+    char *plain_think_start;
+    while ((plain_think_start = str_case_str(output, "think")) != NULL) {
+        /* Check if this is a standalone "think" word */
+        int is_standalone = 1;
+        if (plain_think_start > output) {
+            char prev_char = *(plain_think_start - 1);
+            if (isalnum(prev_char)) is_standalone = 0;
+        }
+        
+        char *after_think = plain_think_start + 5; /* strlen("think") */
+        if (*after_think && isalnum(*after_think)) is_standalone = 0;
+        
+        if (is_standalone) {
+            char *plain_think_end = str_case_str(after_think, "/think");
+            if (plain_think_end) {
+                /* Remove everything from think to /think */
+                char *before = apr_palloc(pool, plain_think_start - output + 1);
+                strncpy(before, output, plain_think_start - output);
+                before[plain_think_start - output] = '\0';
+                
+                char *after = plain_think_end + strlen("/think");
+                output = apr_pstrcat(pool, before, after, NULL);
+            } else {
+                /* No closing tag, skip this occurrence */
+                plain_think_start = after_think;
+                continue;
+            }
+        } else {
+            /* Not a standalone think, skip */
+            plain_think_start = after_think;
+            continue;
+        }
+    }
+    
+    return output;
+}
+
+/* Enhanced code fence cleanup using MuseWeb's proven approach */
 char *cleanup_code_fences(apr_pool_t *pool, const char *content)
 {
     if (!content) return apr_pstrdup(pool, "");
     
     char *output = apr_pstrdup(pool, content);
     
-    /* Step 1: Universal HTML extraction - handle AI responses with explanatory text */
+    /* Step 0: Universal HTML extraction - handle AI responses with explanatory text */
+    /* This ensures we extract clean HTML regardless of prompt instructions or backticks */
     if (strstr(output, "<!DOCTYPE")) {
         /* Find the start of the HTML document */
-        char *doctype_start = strstr(output, "<!DOCTYPE");
-        if (doctype_start) {
-            /* Find the end of the HTML document */
-            char *html_end = strstr(output, "</html>");
-            if (html_end) {
-                /* Extract just the HTML content */
-                int html_length = (html_end + strlen("</html>")) - doctype_start;
-                char *clean_html = apr_palloc(pool, html_length + 1);
-                strncpy(clean_html, doctype_start, html_length);
-                clean_html[html_length] = '\0';
-                output = clean_html;
-            }
+        char *doctype_pos = strstr(output, "<!DOCTYPE");
+        if (doctype_pos > output) {
+            /* Remove everything before DOCTYPE (explanatory text, etc.) */
+            output = apr_pstrdup(pool, doctype_pos);
+        }
+        
+        /* Find the end of the HTML document */
+        char *html_end_pos = strstr(output, "</html>");
+        if (html_end_pos) {
+            /* Remove everything after </html> */
+            int html_end_full = (html_end_pos - output) + strlen("</html>");
+            char *clean_html = apr_palloc(pool, html_end_full + 1);
+            strncpy(clean_html, output, html_end_full);
+            clean_html[html_end_full] = '\0';
+            output = clean_html;
+        }
+    } else if (strstr(output, "<html")) {
+        /* Handle HTML without DOCTYPE */
+        char *html_start_pos = strstr(output, "<html");
+        if (html_start_pos > output) {
+            /* Remove everything before <html */
+            output = apr_pstrdup(pool, html_start_pos);
+        }
+        
+        /* Find the end of the HTML document */
+        char *html_end_pos = strstr(output, "</html>");
+        if (html_end_pos) {
+            /* Remove everything after </html> */
+            int html_end_full = (html_end_pos - output) + strlen("</html>");
+            char *clean_html = apr_palloc(pool, html_end_full + 1);
+            strncpy(clean_html, output, html_end_full);
+            clean_html[html_end_full] = '\0';
+            output = clean_html;
         }
     }
     
-    /* Step 2: Remove markdown code fence patterns */
-    /* Remove ```html, ```javascript, etc. */
-    char *fence_start;
-    while ((fence_start = strstr(output, "```")) != NULL) {
-        char *fence_end = fence_start + 3;
+    /* Early return if no backticks present - most common case for clean HTML */
+    if (!strchr(output, '`')) {
+        return output;
+    }
+    
+    /* Step 1: Remove common code fence patterns with direct string operations (fastest) */
+    /* Enhanced to handle various AI output formats from different prompt sets */
+    output = str_replace_all(pool, output, "```html\n", "");
+    output = str_replace_all(pool, output, "```HTML\n", "");
+    output = str_replace_all(pool, output, "```html", "");
+    output = str_replace_all(pool, output, "```HTML", "");
+    /* Handle other common fence variations */
+    output = str_replace_all(pool, output, "```xml\n", "");
+    output = str_replace_all(pool, output, "```xml", "");
+    output = str_replace_all(pool, output, "```markup\n", "");
+    output = str_replace_all(pool, output, "```markup", "");
+    /* Handle generic fences */
+    output = str_replace_all(pool, output, "```\n", "");
+    output = str_replace_all(pool, output, "```", "");
+    
+    /* Step 2: Handle orphaned "html" at the very beginning */
+    /* This is the most common leftover from ```html removal */
+    /* Be very precise to avoid removing legitimate HTML content */
+    char *first_newline = strchr(output, '\n');
+    if (first_newline) {
+        char *first_line = apr_palloc(pool, (first_newline - output) + 1);
+        strncpy(first_line, output, first_newline - output);
+        first_line[first_newline - output] = '\0';
         
-        /* Skip language identifier if present */
-        while (*fence_end && *fence_end != '\n' && *fence_end != '\r') {
-            fence_end++;
-        }
+        /* Trim whitespace from first line */
+        char *trimmed = trim_whitespace(pool, first_line);
         
-        /* Skip newline after opening fence */
-        if (*fence_end == '\n' || *fence_end == '\r') {
-            fence_end++;
-        }
-        
-        /* Find closing fence */
-        char *closing_fence = strstr(fence_end, "```");
-        if (closing_fence) {
-            /* Remove the fences and keep the content */
-            int content_len = closing_fence - fence_end;
-            char *before = apr_palloc(pool, fence_start - output + 1);
-            strncpy(before, output, fence_start - output);
-            before[fence_start - output] = '\0';
-            
-            char *content_part = apr_palloc(pool, content_len + 1);
-            strncpy(content_part, fence_end, content_len);
-            content_part[content_len] = '\0';
-            
-            char *after = closing_fence + 3;
-            /* Skip newline after closing fence */
-            if (*after == '\n' || *after == '\r') {
-                after++;
-            }
-            
-            output = apr_pstrcat(pool, before, content_part, after, NULL);
-        } else {
-            /* No closing fence found, remove opening fence */
-            char *before = apr_palloc(pool, fence_start - output + 1);
-            strncpy(before, output, fence_start - output);
-            before[fence_start - output] = '\0';
-            
-            output = apr_pstrcat(pool, before, fence_end, NULL);
+        /* Only remove if the first line is EXACTLY "html" or "HTML" and nothing else */
+        if (strcmp(trimmed, "html") == 0 || strcmp(trimmed, "HTML") == 0) {
+            /* Remove the first line containing only "html" */
+            output = apr_pstrdup(pool, first_newline + 1);
         }
     }
     
-    /* Step 3: Remove standalone "html" lines that appear before DOCTYPE */
-    char *html_line;
-    while ((html_line = strstr(output, "\nhtml\n")) != NULL) {
-        char *before = apr_palloc(pool, html_line - output + 1);
-        strncpy(before, output, html_line - output);
-        before[html_line - output] = '\0';
-        
-        char *after = html_line + strlen("\nhtml\n");
-        output = apr_pstrcat(pool, before, "\n", after, NULL);
+    /* Step 3: Handle inline code backticks (preserve content, remove backticks) */
+    /* Only process single backticks that don't contain HTML-like content */
+    if (strchr(output, '`') && !strstr(output, "```")) {
+        /* Simple approach: remove all remaining single backticks */
+        output = str_replace_all(pool, output, "`", "");
     }
     
-    /* Handle html at start of string */
-    if (strncmp(output, "html\n", 5) == 0) {
-        output = apr_pstrdup(pool, output + 5);
-    }
-    
-    /* Step 4: Remove inline backticks */
-    char *backtick;
-    while ((backtick = strchr(output, '`')) != NULL) {
-        char *before = apr_palloc(pool, backtick - output + 1);
-        strncpy(before, output, backtick - output);
-        before[backtick - output] = '\0';
-        
-        char *after = backtick + 1;
-        output = apr_pstrcat(pool, before, after, NULL);
+    /* Step 4: Handle trailing backticks at the very end (common in streaming) */
+    output = trim_whitespace(pool, output);
+    if (str_ends_with(output, "```")) {
+        int len = strlen(output);
+        char *trimmed = apr_palloc(pool, len - 2);
+        strncpy(trimmed, output, len - 3);
+        trimmed[len - 3] = '\0';
+        output = trim_whitespace(pool, trimmed);
+    } else if (str_ends_with(output, "`")) {
+        int len = strlen(output);
+        char *trimmed = apr_palloc(pool, len);
+        strncpy(trimmed, output, len - 1);
+        trimmed[len - 1] = '\0';
+        output = trim_whitespace(pool, trimmed);
     }
     
     return output;
@@ -140,17 +301,53 @@ char *extract_html_content(apr_pool_t *pool, const char *content)
     return cleanup_code_fences(pool, start_pos);
 }
 
-/* Sanitize AI response content */
+/* Enhanced sanitize response using MuseWeb's proven approach */
 char *sanitize_response(apr_pool_t *pool, const char *content)
 {
     if (!content) return apr_pstrdup(pool, "");
     
-    char *cleaned = cleanup_code_fences(pool, content);
+    /* Step 1: Remove thinking tags first (for reasoning models) */
+    char *cleaned = remove_thinking_tags(pool, content);
     
-    /* Remove any remaining explanatory text patterns */
-    /* This is a simplified version - could be enhanced with more patterns */
+    /* Step 2: Clean up code fences and markdown artifacts */
+    cleaned = cleanup_code_fences(pool, cleaned);
     
-    /* Remove common AI explanation patterns */
+    /* Step 3: Handle orphaned "html" text that appears alone on a line */
+    /* Be very specific to avoid removing legitimate HTML content */
+    char *first_newline = strchr(cleaned, '\n');
+    if (first_newline) {
+        char *first_line = apr_palloc(pool, (first_newline - cleaned) + 1);
+        strncpy(first_line, cleaned, first_newline - cleaned);
+        first_line[first_newline - cleaned] = '\0';
+        
+        char *trimmed_first = trim_whitespace(pool, first_line);
+        /* Only remove if the first line is EXACTLY "html" or "HTML" and nothing else */
+        if (strcmp(trimmed_first, "html") == 0 || strcmp(trimmed_first, "HTML") == 0) {
+            /* Remove the first line containing only "html" */
+            cleaned = apr_pstrdup(pool, first_newline + 1);
+        }
+    }
+    
+    /* Step 4: Fix common DOCTYPE issues where the opening < got removed */
+    cleaned = trim_whitespace(pool, cleaned);
+    if (strncmp(cleaned, "!DOCTYPE", 8) == 0) {
+        cleaned = apr_pstrcat(pool, "<", cleaned, NULL);
+    } else if (strncmp(cleaned, "html", 4) == 0) {
+        /* Only add < if this looks like a legitimate HTML tag (contains attributes or >) */
+        if (strchr(cleaned, '>') || strchr(cleaned, ' ')) {
+            cleaned = apr_pstrcat(pool, "<", cleaned, NULL);
+        }
+    }
+    
+    /* Step 5: Ensure we have a complete HTML document if the content appears to be HTML */
+    if (strstr(cleaned, "<html") && !strstr(cleaned, "<!DOCTYPE html>")) {
+        /* Add DOCTYPE if missing */
+        if (strncmp(cleaned, "<!", 2) != 0) {
+            cleaned = apr_pstrcat(pool, "<!DOCTYPE html>\n", cleaned, NULL);
+        }
+    }
+    
+    /* Step 6: Remove common AI explanation patterns */
     char *patterns[] = {
         "Here's the HTML:",
         "Here is the HTML:",
@@ -158,6 +355,10 @@ char *sanitize_response(apr_pool_t *pool, const char *content)
         "I've created",
         "Hope you like it",
         "Let me know if you need",
+        "Here's a",
+        "Here is a",
+        "I've generated",
+        "I'll generate",
         NULL
     };
     
@@ -177,6 +378,16 @@ char *sanitize_response(apr_pool_t *pool, const char *content)
             }
         }
     }
+    
+    /* Step 7: Final cleanup - remove excessive whitespace */
+    /* Replace multiple consecutive newlines with maximum of 2 newlines */
+    if (strstr(cleaned, "\n\n\n")) {
+        cleaned = str_replace_all(pool, cleaned, "\n\n\n\n", "\n\n");
+        cleaned = str_replace_all(pool, cleaned, "\n\n\n", "\n\n");
+    }
+    
+    /* Step 8: Final trim */
+    cleaned = trim_whitespace(pool, cleaned);
     
     return cleaned;
 }

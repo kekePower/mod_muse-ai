@@ -68,6 +68,40 @@ static char *extract_json_content(apr_pool_t *pool, const char *json_data)
         
         /* Unescape common JSON escape sequences */
         char *unescaped = apr_pstrdup(pool, content);
+        
+        /* Replace Unicode escape sequences */
+        char *unicode_pos;
+        while ((unicode_pos = strstr(unescaped, "\\u")) != NULL) {
+            /* Parse the 4-digit hex code */
+            if (strlen(unicode_pos) >= 6) {
+                char hex_str[5];
+                strncpy(hex_str, unicode_pos + 2, 4);
+                hex_str[4] = '\0';
+                
+                /* Convert hex to integer */
+                unsigned int unicode_val = (unsigned int)strtol(hex_str, NULL, 16);
+                
+                /* Convert common Unicode values to ASCII */
+                char replacement = 0;
+                if (unicode_val == 0x003c) replacement = '<';      /* \u003c -> < */
+                else if (unicode_val == 0x003e) replacement = '>'; /* \u003e -> > */
+                else if (unicode_val == 0x0026) replacement = '&'; /* \u0026 -> & */
+                else if (unicode_val == 0x0022) replacement = '"'; /* \u0022 -> " */
+                else if (unicode_val == 0x0027) replacement = '\''; /* \u0027 -> ' */
+                else if (unicode_val == 0x002f) replacement = '/'; /* \u002f -> / */
+                
+                if (replacement) {
+                    *unicode_pos = replacement;
+                    memmove(unicode_pos + 1, unicode_pos + 6, strlen(unicode_pos + 6) + 1);
+                } else {
+                    /* Skip this Unicode sequence if we don't handle it */
+                    unicode_pos += 6;
+                }
+            } else {
+                break;
+            }
+        }
+        
         /* Replace \\n with \n */
         char *newline_pos;
         while ((newline_pos = strstr(unescaped, "\\n")) != NULL) {
@@ -111,9 +145,25 @@ static int handle_streaming_response(request_rec *r, muse_ai_config *cfg,
     
     while (1) {
         len = sizeof(line_buffer) - 1;
+        
+        if (cfg->debug) {
+            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                         "mod_muse_ai: About to receive data from socket");
+        }
+        
         rv = apr_socket_recv(sock, line_buffer, &len);
         
+        if (cfg->debug) {
+            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                         "mod_muse_ai: Received %lu bytes, status: %d", 
+                         (unsigned long)len, rv);
+        }
+        
         if (rv == APR_EOF || len == 0) {
+            if (cfg->debug) {
+                ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                             "mod_muse_ai: End of stream (EOF or len=0)");
+            }
             break;
         }
         
@@ -124,6 +174,11 @@ static int handle_streaming_response(request_rec *r, muse_ai_config *cfg,
         }
         
         line_buffer[len] = '\0';
+        
+        if (cfg->debug) {
+            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                         "mod_muse_ai: Raw data received: '%.200s'", line_buffer);
+        }
         
         /* Skip HTTP headers if not yet processed */
         char *body_start = line_buffer;
@@ -295,7 +350,19 @@ int make_backend_request(request_rec *r, muse_ai_config *cfg,
     apr_socket_timeout_set(sock, apr_time_from_sec(cfg->timeout));
     
     /* Connect to backend */
+    if (cfg->debug) {
+        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                     "mod_muse_ai: About to connect to %s:%d with timeout %ld seconds", 
+                     host, port, cfg->timeout);
+    }
+    
     rv = apr_socket_connect(sock, sa);
+    
+    if (cfg->debug) {
+        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                     "mod_muse_ai: Socket connect returned with status: %d", rv);
+    }
+    
     if (rv != APR_SUCCESS) {
         ap_log_rerror(APLOG_MARK, APLOG_ERR, rv, r,
                      "mod_muse_ai: Failed to connect to %s:%d", host, port);
@@ -314,7 +381,7 @@ int make_backend_request(request_rec *r, muse_ai_config *cfg,
             "Connection: close\r\n"
             "\r\n"
             "%s",
-            uri.path ? uri.path : "/v1/chat/completions",
+            uri.path ? apr_pstrcat(r->pool, uri.path, "/chat/completions", NULL) : "/v1/chat/completions",
             host, port,
             cfg->api_key,
             (unsigned long)strlen(json_payload),
@@ -328,10 +395,16 @@ int make_backend_request(request_rec *r, muse_ai_config *cfg,
             "Connection: close\r\n"
             "\r\n"
             "%s",
-            uri.path ? uri.path : "/v1/chat/completions",
+            uri.path ? apr_pstrcat(r->pool, uri.path, "/chat/completions", NULL) : "/v1/chat/completions",
             host, port,
             (unsigned long)strlen(json_payload),
             json_payload);
+    }
+    
+    if (cfg->debug) {
+        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                     "mod_muse_ai: HTTP request built successfully, length: %lu", 
+                     (unsigned long)strlen(request_headers));
     }
     
     // CRITICAL DEBUG: Show the full HTTP request being sent
@@ -357,6 +430,11 @@ int make_backend_request(request_rec *r, muse_ai_config *cfg,
         }
         p += sent_len;
         request_len -= sent_len;
+    }
+    
+    if (cfg->debug) {
+        ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                     "mod_muse_ai: Request sent successfully, handling response");
     }
     
     /* Handle response based on streaming configuration */

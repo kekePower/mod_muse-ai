@@ -28,7 +28,7 @@ void *create_advanced_muse_ai_config(apr_pool_t *pool, server_rec *s)
     /* Set all other pointers to NULL to avoid crashes */
     cfg->reasoning_model_patterns = NULL;
     cfg->backend_endpoints = NULL;
-    cfg->prompts_dir = NULL;
+    cfg->prompts_dir = NULL;  /* Will be set by directive handler */
     cfg->ratelimit_whitelist_ips = NULL;
     
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s, 
@@ -49,14 +49,19 @@ void *merge_advanced_muse_ai_config(apr_pool_t *p, void *base_conf, void *new_co
     merged->endpoint = new->endpoint ? new->endpoint : base->endpoint;
     merged->api_key = new->api_key ? new->api_key : base->api_key;
     merged->model = new->model ? new->model : base->model;
-    merged->timeout = (new->timeout != 300) ? new->timeout : base->timeout;
+    merged->timeout = (new->timeout > 0 && new->timeout != 300) ? new->timeout : base->timeout;
+    
+    // DEBUG: Log timeout merge
+    ap_log_error(APLOG_MARK, APLOG_ERR, 0, NULL,
+                "[mod_muse_ai] MERGE DEBUG: base->timeout=%d, new->timeout=%d, merged->timeout=%d", 
+                base->timeout, new->timeout, merged->timeout);
     merged->debug = new->debug;
     merged->streaming = new->streaming;
 
-    // Set all complex fields to NULL to avoid crashes
+    // Set all complex fields to NULL to avoid crashes, but preserve prompts_dir
     merged->reasoning_model_patterns = NULL;
     merged->backend_endpoints = NULL;
-    merged->prompts_dir = NULL;
+    merged->prompts_dir = new->prompts_dir ? new->prompts_dir : base->prompts_dir;
     merged->ratelimit_whitelist_ips = NULL;
 
     return merged;
@@ -272,11 +277,16 @@ const char *set_muse_ai_prompts_dir(cmd_parms *cmd, void *cfg, const char *arg)
     extern module muse_ai_module;
     advanced_muse_ai_config *config = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
     
+    ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, cmd->server, 
+                "[mod_muse_ai] set_muse_ai_prompts_dir called with arg: %s", arg ? arg : "(NULL)");
+    
     if (!arg || strlen(arg) == 0) {
         return "MuseAiPromptsDir requires a directory path";
     }
     
     config->prompts_dir = apr_pstrdup(cmd->pool, arg);
+    ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, cmd->server, 
+                "[mod_muse_ai] prompts_dir set to: %s", config->prompts_dir);
     return NULL;
 }
 
@@ -330,7 +340,13 @@ const char *set_muse_ai_timeout(cmd_parms *cmd, void *dcfg, const char *arg)
     (void)dcfg;
     extern module muse_ai_module;
     advanced_muse_ai_config *cfg = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
-    cfg->timeout = atoi(arg);
+    int timeout_val = atoi(arg);
+    cfg->timeout = timeout_val;
+    
+    ap_log_error(APLOG_MARK, APLOG_ERR, 0, cmd->server,
+                "[mod_muse_ai] DEBUG: Setting timeout to %d seconds from arg '%s'", 
+                timeout_val, arg);
+    
     return NULL;
 }
 

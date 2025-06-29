@@ -1,5 +1,5 @@
-#ifndef PHASE3_INTEGRATION_H
-#define PHASE3_INTEGRATION_H
+#ifndef REQUEST_HANDLERS_H
+#define REQUEST_HANDLERS_H
 
 #include "httpd.h"
 #include "http_config.h"
@@ -11,7 +11,8 @@ int init_phase3_features(apr_pool_t *pool, server_rec *s, struct advanced_muse_a
 
 /* Phase 3 request handlers */
 int enhanced_muse_ai_handler(request_rec *r);
+int ai_file_handler(request_rec *r);
 int metrics_handler(request_rec *r);
 int health_check_handler(request_rec *r);
 
-#endif /* PHASE3_INTEGRATION_H */
+#endif /* REQUEST_HANDLERS_H */

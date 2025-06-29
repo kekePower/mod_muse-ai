@@ -81,6 +81,10 @@ char *process_streaming_content(request_rec *r, streaming_state_t *state,
     
     /* Phase 1: Look for HTML start if we haven't started streaming yet */
     if (!state->streaming_started) {
+        /* Apply basic sanitization to the buffered content to remove obvious artifacts */
+        char *sanitized_buffer = cleanup_code_fences(r->pool, state->pending_buffer);
+        state->pending_buffer = sanitized_buffer;
+        
         int html_start_pos = find_html_start(state->pending_buffer);
         
         if (html_start_pos != -1) {
@@ -93,16 +97,18 @@ char *process_streaming_content(request_rec *r, streaming_state_t *state,
             return apr_pstrdup(r->pool, html_content);
         }
         
-        /* No HTML found - check if we have enough content to start streaming plain text */
+        /* Check if we have a substantial buffer to decide whether to start streaming */
         int buffer_len = strlen(state->pending_buffer);
-        if (buffer_len > 0) {
-            /* Start streaming plain text immediately */
+        
+        /* Only start streaming if we have enough content or if it looks like non-HTML content */
+        if (buffer_len > 100 || (buffer_len > 0 && !strstr(state->pending_buffer, "```"))) {
+            /* Start streaming the sanitized content */
             state->streaming_started = 1;
             state->last_sent_length = buffer_len;
             return apr_pstrdup(r->pool, state->pending_buffer);
         }
         
-        /* No content yet - keep buffering */
+        /* Keep buffering - we might get HTML start or more content */
         return apr_pstrdup(r->pool, "");
     }
     
