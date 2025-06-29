@@ -1,0 +1,76 @@
+# Welcome to mod_muse-ai Translation Demo
+
+This is a demonstration of the AI-powered translation system built into mod_muse-ai.
+
+## Features
+
+### Automatic Language Detection
+The system automatically detects your preferred language from:
+- URL prefixes (like `/es/demo-translation.ai`)
+- Query parameters (like `?lang=es`)
+- Browser language settings
+- Saved language preferences
+
+### High-Quality Translation
+Our AI translation system supports 46 languages with three quality tiers:
+
+**Tier 1 (Excellent)**: English, German, Spanish, French, Italian, Japanese, Portuguese, Chinese
+**Tier 2 (Good)**: Arabic, Bengali, Czech, Danish, Greek, Finnish, Hebrew, Hindi, and more
+**Tier 3 (Functional)**: Bulgarian, Catalan, Croatian, Dutch, Estonian, and others
+
+### SEO-Friendly URLs
+Clean, search-engine-friendly URLs like:
+- `/en/welcome` for English
+- `/es/bienvenidos` for Spanish  
+- `/fr/bienvenue` for French
+- `/de/willkommen` for German
+
+## How to Test
+
+Try accessing this page with different language preferences:
+
+1. **URL Prefix Method**: 
+   - `/es/demo-translation.ai` (Spanish)
+   - `/fr/demo-translation.ai` (French)
+   - `/de/demo-translation.ai` (German)
+
+2. **Query Parameter Method**:
+   - `demo-translation.ai?lang=es` (Spanish)
+   - `demo-translation.ai?locale=fr_FR` (French)
+   - `demo-translation.ai?language=de` (German)
+
+3. **Browser Language**: Set your browser's preferred language and reload
+
+## Technical Details
+
+This translation system:
+- Preserves HTML formatting and structure
+- Maintains technical terms when appropriate
+- Adapts tone and style for the target locale
+- Includes cultural context awareness
+- Provides fallback to original language
+
+## Sample Content
+
+Here's some sample content to demonstrate translation quality:
+
+### Business Information
+**Company**: TechCorp Solutions
+**Founded**: 2020
+**Location**: San Francisco, California
+**Employees**: 150+
+
+### Product Features
+- **Cloud Integration**: Seamless connection to major cloud providers
+- **API-First Design**: RESTful APIs with comprehensive documentation
+- **Security**: Enterprise-grade encryption and compliance
+- **Scalability**: Auto-scaling infrastructure for peak performance
+
+### Contact Information
+- **Email**: contact@techcorp.example
+- **Phone**: +1 (555) 123-4567
+- **Address**: 123 Innovation Drive, San Francisco, CA 94105
+
+---
+
+*This demo showcases the power of AI-driven translation while maintaining professional quality and technical accuracy across languages.*

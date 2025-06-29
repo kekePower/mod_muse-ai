@@ -1,0 +1,61 @@
+# .htaccess Configuration for mod_muse-ai Translation System
+# Place this file in your document root as .htaccess
+# Requires mod_rewrite and AllowOverride All or AllowOverride FileInfo
+
+# Enable URL rewriting
+RewriteEngine On
+
+# Language prefix handling for .ai files
+# This works with mod_muse_ai's internal language detection
+
+# Rule 1: Handle language-prefixed .ai files
+# /es/page.ai -> /page.ai (language detected by mod_muse_ai)
+RewriteRule ^([a-z]{2,3})/(.+\.ai)$ /$2 [L,E=MUSE_LANG_PREFIX:$1]
+
+# Rule 2: Handle language-prefixed directories
+# /es/docs/ -> /docs/index.ai
+RewriteRule ^([a-z]{2,3})/(.+/)$ /$2index.ai [L,E=MUSE_LANG_PREFIX:$1]
+
+# Rule 3: Handle root language URLs
+# /es/ -> /index.ai
+RewriteRule ^([a-z]{2,3})/?$ /index.ai [L,E=MUSE_LANG_PREFIX:$1]
+
+# Optional: Add trailing slash to language codes
+# /es -> /es/
+RewriteRule ^([a-z]{2,3})$ /$1/ [R=301,L]
+
+# Optional: Language switching utility
+# /switch?to=es&return=page.ai -> /es/page.ai
+RewriteCond %{QUERY_STRING} ^to=([a-z]{2,3})&return=(.+)$
+RewriteRule ^switch$ /%1/%2? [R=302,L]
+
+# Configure .ai file handling
+<FilesMatch "\.ai$">
+    # Set handler for mod_muse_ai
+    SetHandler muse-ai-handler
+    
+    # Optional environment variables
+    SetEnv MUSE_DEFAULT_LANG "en_US"
+    SetEnv MUSE_LANG_DEBUG "0"
+</FilesMatch>
+
+# Security: Prevent access to sensitive files
+<FilesMatch "\.(conf|log|key)$">
+    Require all denied
+</FilesMatch>
+
+# Optional: Custom error pages
+ErrorDocument 400 /error/bad-request.html
+ErrorDocument 404 /error/not-found.html
+ErrorDocument 500 /error/server-error.html
+
+# Optional: Set cache headers for static content
+<FilesMatch "\.(css|js|png|jpg|jpeg|gif|ico|svg)$">
+    ExpiresActive On
+    ExpiresDefault "access plus 1 month"
+</FilesMatch>
+
+# Optional: Compression for text files
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript text/xml application/xml
+</IfModule>
