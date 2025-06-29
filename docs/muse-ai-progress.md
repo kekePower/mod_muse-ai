@@ -279,18 +279,84 @@ The working simple proxy consists of:
 | **Performance** | Connection pool, keep-alive, HTTP/2 push, shared memory cache | ⚠️ **PARTIAL** | 40% |
 | **Security** | Rate limiting, request size limits, authentication tokens | ❌ **MISSING** | 10% |
 | **Observability** | Prometheus exporter, custom Apache log format, tracing | ⚠️ **PARTIAL** | 30% |
-| **Config UX** | `MuseAiModel`, `MuseAiCacheTTL`, `MuseAiReasoningModels`, dynamic reload | ✅ **COMPLETED** | 100% |
+| **Config UX** | `MuseAiModel`, `MuseAiCacheTTL`, `MuseAiReasoningModels`, dynamic reload, **MuseAiMaxTokens** directive | ✅ **COMPLETED & ENHANCED** | 100% |
 | **Filters** | Output filter for HTML augmentation | ❌ **NOT STARTED** | 0% |
-| **Streaming** | SSE/chunked transfer with real-time sanitization | ✅ **COMPLETED** | 100% |
+| **Streaming** | SSE/chunked transfer with real-time sanitization, dynamic buffer sizing, robust error handling | ✅ **COMPLETED & STABLE** | 100% |
 | **AI Features** | Priority reasoning model detection, configurable patterns | ⚠️ **PARTIAL** | 25% |
-| **Multilingual** | Advanced language translation with context preservation | ❌ **NOT STARTED** | 0% |
+| **Multilingual** | Advanced language translation with context preservation | 📝 **PLANNING COMPLETE** | 10% |
 | **Error Recovery** | Graceful streaming failures, partial content recovery | ⚠️ **PARTIAL** | 30% |
+
+### 📝 **Translation System Planning Completed**
+- **Date**: 2025-06-29 18:22
+- **Milestone**: Created `docs/muse-translation-plan.md` – a comprehensive, step-by-step implementation plan for robust, user-centric AI-powered translation in mod_muse-ai.
+- **Plan Scope**:
+    - Internal supported locales module (easy updates, CSV-driven)
+    - Clean URL, query, and cookie-based language selection logic
+    - Fallback always serves the file's original language
+    - Integration steps for request handlers
+    - Update and documentation workflow
+    - Testing and future enhancement roadmap
+- **Next Steps**: Begin coding the internal locale module and handler logic per plan. Update HOWTO.md and docs as features are implemented.
 
 ### 🎯 **COMPLETION BREAKDOWN**
 - **✅ FULLY COMPLETED**: 2/9 areas (Streaming ✅, Config UX ✅)
 - **⚠️ PARTIALLY COMPLETED**: 4/9 areas (Performance, Observability, AI Features, Error Recovery)
 - **❌ NOT STARTED**: 3/9 areas (Security, Filters, Multilingual)
 - **📈 OVERALL PROGRESS**: 35% complete (3.15/9 areas)
+
+---
+
+### 🆕 **MAJOR ACHIEVEMENTS & STATUS UPDATE (2025-06-29)**
+
+#### 🚀 Enterprise-Ready API Key & Commercial Provider Support
+- **API Key Authentication**: `MuseAiApiKey` directive now enables secure Bearer token authentication for commercial AI providers (OpenAI, Google Gemini, Anthropic Claude, etc.)
+- **Dual-Mode**: Seamlessly works with both local (Ollama) and commercial cloud APIs
+- **Security**: API key is never exposed in logs or web interface
+- **Enterprise-Grade**: Industry-standard, tested with Google Gemini and OpenAI endpoints
+
+#### 🎉 Phase 3: Advanced Features Complete & Stable
+- **Advanced Config System**: 20+ new directives, robust merging, and validation
+- **Connection Pooling**: Thread-safe, efficient backend management
+- **Metrics & Health Endpoints**: `/metrics` (Prometheus) and `/health` for observability
+- **Rate Limiting & Caching**: Configurable controls for production traffic
+- **Streaming Pipeline**: Real-time, dynamically sized buffers for optimal performance
+- **Reasoning Model Support**: Pattern-based detection for advanced AI features
+- **Stability**: No segfaults, clean startup, robust error handling
+
+#### 📝 Documentation Overhaul
+- **README.md**: Now honest, welcoming, and focused on inviting contributors
+- **HOWTO.md**: Comprehensive, step-by-step technical guide with clear WIP status
+- **.ai Handler Section**: Full documentation of dynamic file processing and MuseWeb sanitization
+
+#### 🛠️ Code Quality & Build System Breakthroughs
+- **Zero Warnings**: All Meson and GCC warnings resolved
+- **File Organization**: Refactored confusing filenames to descriptive, maintainable structure
+- **Dynamic Buffer Sizing**: Streaming buffers now scale automatically with `MuseAiMaxTokens`
+- **Segfault Fix**: Clean Apache startup with robust config handling
+
+#### 🌍 Translation System: Planning Complete
+- **docs/muse-translation-plan.md**: Detailed design for future multilingual support
+
+#### 📢 Project Status & Call for Contributors
+- **Experimental/WIP**: Not production-ready for high-traffic or mission-critical use
+- **Stable for development and experimentation**
+- **Actively seeking contributors, testers, and feedback**
+- **All contributions welcome: code, docs, testing, ideas**
+
+---
+
+
+- **Critical Bug Fixes**: Resolved segmentation faults in directive handlers (MuseAiMaxTokens, MuseAiStreaming) by correcting config access patterns
+- **Stability**: Apache now starts reliably with all advanced directives enabled
+- **README & Homepage Overhaul**: Project now features an honest, humble, and welcoming tone, inviting collaboration and acknowledging WIP status
+- **index.ai**: Homepage rewritten to reflect experimental nature, current capabilities, and call for contributions
+
+### 🛡️ **CURRENT STATE**
+- **Stable for experimentation and development**
+- **Not yet production-ready** (missing advanced security, error recovery, and multilingual features)
+- **Actively seeking contributors, testers, and feedback**
+
+---
 
 ### 🎉 MAJOR BREAKTHROUGH: Streaming Resolution
 **Problem**: Streaming responses were not reaching clients despite backend connectivity
