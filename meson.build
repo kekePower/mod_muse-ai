@@ -43,7 +43,8 @@ source_files = [
   'src/connection_pool.c',
   'src/metrics.c',
   'src/advanced_config.c',
-  'src/request_handlers.c'
+  'src/request_handlers.c',
+  'src/supported_locales.c'
 ]
 
 # Build the shared module using Meson's native capabilities
