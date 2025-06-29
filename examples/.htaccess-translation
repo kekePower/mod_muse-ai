@@ -6,19 +6,25 @@
 RewriteEngine On
 
 # Language prefix handling for .ai files
-# This works with mod_muse_ai's internal language detection
+# This converts language-prefixed URLs to query parameters
+# The QSA flag preserves any existing query parameters
+# mod_muse_ai detects the lang parameter and adds translation instructions
 
 # Rule 1: Handle language-prefixed .ai files
-# /es/page.ai -> /page.ai (language detected by mod_muse_ai)
-RewriteRule ^([a-z]{2,3})/(.+\.ai)$ /$2 [L,E=MUSE_LANG_PREFIX:$1]
+# /es/page.ai -> /page.ai?lang=es
+RewriteRule ^([a-z]{2,3})/(.+\.ai)$ /$2?lang=$1 [L,QSA]
 
 # Rule 2: Handle language-prefixed directories
-# /es/docs/ -> /docs/index.ai
-RewriteRule ^([a-z]{2,3})/(.+/)$ /$2index.ai [L,E=MUSE_LANG_PREFIX:$1]
+# /es/docs/ -> /docs/index.ai?lang=es
+RewriteRule ^([a-z]{2,3})/(.+/)$ /$2index.ai?lang=$1 [L,QSA]
 
-# Rule 3: Handle root language URLs
-# /es/ -> /index.ai
-RewriteRule ^([a-z]{2,3})/?$ /index.ai [L,E=MUSE_LANG_PREFIX:$1]
+# Rule 3: Handle language-prefixed pages without .ai extension
+# /es/features -> /features.ai?lang=es
+RewriteRule ^([a-z]{2,3})/([^/]+)$ /$2.ai?lang=$1 [L,QSA]
+
+# Rule 4: Handle root language URLs
+# /es/ -> /index.ai?lang=es
+RewriteRule ^([a-z]{2,3})/?$ /index.ai?lang=$1 [L,QSA]
 
 # Optional: Add trailing slash to language codes
 # /es -> /es/
@@ -59,3 +65,23 @@ ErrorDocument 500 /error/server-error.html
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript text/xml application/xml
 </IfModule>
+
+# TESTING THE TRANSLATION SYSTEM:
+# 1. Create a test .ai file: echo "Create a welcome page" > /var/www/html/test.ai
+# 2. Test English (default): curl http://localhost/test.ai
+# 3. Test Spanish with .ai: curl http://localhost/es/test.ai
+# 4. Test French clean URL: curl http://localhost/fr/test
+# 5. Test German features: curl http://localhost/de/features
+# 6. Check logs: tail -f /var/log/httpd/error_log | grep language_selection
+#
+# Supported languages: 46 languages with quality tiers
+# See docs/pruned-languages.csv for the complete list
+#
+# URL FORMATS SUPPORTED:
+# - With .ai extension: /es/page.ai, /fr/docs/file.ai
+# - Clean URLs (recommended): /es/page, /fr/features, /de/documentation
+# - Directory URLs: /es/docs/, /fr/help/
+# - Root language URLs: /es/, /fr/, /de/
+# - Query params: /page.ai?lang=es, /file.ai?locale=fr_FR
+# - Cookies: muse_lang=es (remembered preferences)
+# - Browser headers: Accept-Language detection

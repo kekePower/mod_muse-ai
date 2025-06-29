@@ -188,19 +188,37 @@ int ai_file_handler(request_rec *r)
             const char *display_name = muse_get_locale_display_name(lang_selection->selected_locale);
             const char *tier = muse_get_locale_tier(lang_selection->selected_locale);
             
+            /* Extract language code for URL prefixes */
+            char lang_code_buffer[8];
+            const char *lang_code = "en"; /* default */
+            if (muse_extract_language_code(lang_selection->selected_locale, lang_code_buffer, sizeof(lang_code_buffer))) {
+                lang_code = lang_code_buffer;
+            }
+            
             enhanced_system_prompt = apr_psprintf(r->pool,
                 "%s\n\n"
-                "TRANSLATION INSTRUCTIONS:\n"
+                "**TRANSLATION INSTRUCTIONS:**\n"
                 "- Translate the final output to %s (%s)\n"
                 "- Translation quality tier: %s\n"
                 "- Maintain the original meaning, tone, and formatting\n"
                 "- Preserve any HTML tags, markdown, or special formatting\n"
                 "- Use natural, fluent language appropriate for the target locale\n"
-                "- If technical terms don't translate well, keep them in English with brief explanation",
+                "- If technical terms don't translate well, keep them in English with brief explanation\n"
+                "\n"
+                "**CRITICAL URL LOCALIZATION REQUIREMENT:**\n"
+                "- MUST update navigation links in <nav> to include language prefix '/%s/'\n"
+                "- REQUIRED changes: href=\"/\" becomes href=\"/%s/\", href=\"/features\" becomes href=\"/%s/features\"\n"
+                "- NEVER modify: CSS links (/css/), JavaScript (/js/), images, or external URLs\n"
+                "- Example: <a href=\"/\">Home</a> must become <a href=\"/%s/\">Home</a>\n"
+                "- This is essential for maintaining language context during navigation",
                 final_system_prompt,
                 display_name ? display_name : lang_selection->selected_locale,
                 lang_selection->selected_locale,
-                tier ? tier : "Unknown");
+                tier ? tier : "Unknown",
+                lang_code ? lang_code : "en",
+                lang_code ? lang_code : "en",
+                lang_code ? lang_code : "en",
+                lang_code ? lang_code : "en");
                 
             ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
                          "[mod_muse_ai] Added translation instructions for %s", lang_selection->selected_locale);

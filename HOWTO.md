@@ -586,6 +586,50 @@ curl "http://localhost/metrics"
 
 ---
 
+## URL Localization
+
+The translation system automatically updates navigation links to maintain language context. When a user visits `/es/page.ai`, all navigation links are updated to include the `/es/` prefix.
+
+### How It Works
+
+**Automatic Link Updates:**
+```html
+<!-- Original navigation -->
+<nav>
+    <a href="/">Home</a> | 
+    <a href="/features">Features</a> | 
+    <a href="/documentation">Documentation</a>
+</nav>
+
+<!-- Automatically becomes (for Spanish) -->
+<nav>
+    <a href="/es/">Inicio</a> | 
+    <a href="/es/features">Características</a> | 
+    <a href="/es/documentation">Documentación</a>
+</nav>
+```
+
+**Supported URL Formats:**
+- **Clean URLs**: `/es/features`, `/de/documentation` (recommended)
+- **With .ai extension**: `/es/features.ai`, `/fr/page.ai`
+- **Directory URLs**: `/es/docs/`, `/fr/help/`
+- **Root language**: `/es/`, `/fr/`, `/de/`
+
+**Smart Asset Handling:**
+- ✅ **Navigation links**: Updated with language prefix
+- ✅ **Static assets**: CSS, JS, images remain unchanged
+- ✅ **External links**: GitHub, social media links unchanged
+- ✅ **Anchors**: `#section` links remain unchanged
+
+### Benefits
+
+- **Language Persistence**: Users stay in their selected language while navigating
+- **SEO-Friendly**: Clean URLs like `/es/features` instead of query parameters
+- **Professional UX**: Seamless multilingual website experience
+- **Automatic**: No manual link management required
+
+---
+
 ## Troubleshooting
 
 ### Module Not Loading
