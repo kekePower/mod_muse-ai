@@ -93,7 +93,16 @@ char *process_streaming_content(request_rec *r, streaming_state_t *state,
             return apr_pstrdup(r->pool, html_content);
         }
         
-        /* No HTML start found yet - keep buffering */
+        /* No HTML found - check if we have enough content to start streaming plain text */
+        int buffer_len = strlen(state->pending_buffer);
+        if (buffer_len > 0) {
+            /* Start streaming plain text immediately */
+            state->streaming_started = 1;
+            state->last_sent_length = buffer_len;
+            return apr_pstrdup(r->pool, state->pending_buffer);
+        }
+        
+        /* No content yet - keep buffering */
         return apr_pstrdup(r->pool, "");
     }
     

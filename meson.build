@@ -30,24 +30,34 @@ apache_include_args += '-I' + apache_includes
 message('Apache include arguments: ' + ' '.join(apache_include_args))
 message('Apache module directory: ' + apache_libexec)
 
-# Define all source files
-source_files = [
-    'src/mod_muse_ai_main.c',
-    'src/streaming.c',
-    'src/sanitize.c', 
-    'src/http_client.c',
-    'src/utils.c'
-]
+# Define all source files for the modular build
+modular_source_files = [
+  'src/mod_muse_ai_main.c',
+  'src/streaming.c',
+  'src/sanitize.c', 
+  'src/http_client.c',
+  'src/utils.c',
+  'src/connection_pool.c',
+  'src/metrics.c',
+  'src/advanced_config.c',
+  'src/phase3_integration.c',
+  'src/mod_muse_ai.h',
+  'src/connection_pool.h',
+  'src/advanced_config.h',
+  'src/advanced_streaming.h'
+] # Pass header to trigger rebuilds on change
 
 # Custom target to build the Apache module
 mod_muse_ai_so = custom_target('mod_muse_ai.so',
-    output: 'mod_muse_ai.so',
-    command: [
-        meson.current_source_dir() / 'scripts' / 'build_modular.sh',
-        '@OUTDIR@',
-        apxs.full_path()
-    ],
-    build_by_default: true
+  input: modular_source_files,
+  output: 'mod_muse_ai.so',
+  command: [
+    meson.current_source_dir() / 'scripts' / 'build_modular.sh',
+    '@OUTDIR@',
+    apxs.full_path(),
+    '@INPUT@'
+  ],
+  build_by_default: true
 )
 
 # Custom install target
