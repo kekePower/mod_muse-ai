@@ -127,7 +127,7 @@ Add handler configuration for AI requests:
 <Location "/ai">
     # Enable the AI module for this specific location
     MuseAiEnable On
-    SetHandler enhanced-muse-ai-handler
+    SetHandler muse-ai-handler
     Require all granted
 </Location>
 ```
@@ -151,17 +151,81 @@ sudo ninja -C build apache-restart
 
 > **⚠️ Development Status**: Many advanced features listed in this section are still in development. For a stable, working configuration, use the basic setup above or the [`examples/mod_muse-ai-simple.conf`](examples/mod_muse-ai-simple.conf) file.
 
-### Commercial AI Providers
+### Dynamic Model Configuration
 
-For commercial AI services (OpenAI, Google Gemini, Anthropic):
+mod_muse-ai now supports dynamic model switching with zero-downtime updates through a JSON sidecar configuration file. This allows you to:
+
+- Configure multiple AI models and switch between them without restarting Apache
+- Use environment variables for sensitive data like API keys
+- Select models per-request using environment variables
+
+#### Basic Setup
+
+1. Create a `models.json` file in your Apache configuration directory:
+
+```json
+{
+  "models": [
+    {
+      "name": "default",
+      "endpoint": "http://127.0.0.1:11434/v1",
+      "api_key": "",
+      "model": "llama3.2:latest"
+    },
+    {
+      "name": "openai",
+      "endpoint": "https://api.openai.com/v1",
+      "api_key": "${OPENAI_API_KEY}",
+      "model": "gpt-4.1-nano"
+    },
+    {
+      "name": "gemini",
+      "endpoint": "https://generativelanguage.googleapis.com/v1beta",
+      "api_key": "${GEMINI_API_KEY}",
+      "model": "gemini-2.5-flash-lite"
+    }
+  ],
+  "default_model": "default"
+}
+```
+
+2. Use environment variables for API keys:
+
+```bash
+# In your Apache environment file or startup script
+export OPENAI_API_KEY="your-openai-key-here"
+export GEMINI_API_KEY="your-gemini-key-here"
+```
+
+3. Select models per-request using environment variables:
 
 ```apache
-# Commercial AI Configuration
-MuseAiEndpoint "https://api.openai.com/v1"
-MuseAiApiKey "your-api-key-here"
-MuseAiModel "gpt-4.1-nano"
-MuseAiTimeout 60
+# In your Apache configuration
+<Location "/ai/premium">
+    SetHandler muse-ai-handler
+    SetEnv MuseAIModel "openai"
+    Require all granted
+</Location>
+
+<Location "/ai/standard">
+    SetHandler muse-ai-handler
+    SetEnv MuseAIModel "default"
+    Require all granted
+</Location>
 ```
+
+#### Hot Reloading
+
+The module automatically monitors the `models.json` file for changes and reloads it when modified, without requiring an Apache restart. This allows you to:
+
+- Add new models
+- Update existing model configurations
+- Change the default model
+- Rotate API keys
+
+### Commercial AI Providers
+
+For commercial AI services (OpenAI, Google Gemini, Anthropic), use the dynamic model configuration system described above:
 
 ### Performance Configuration
 

@@ -19,6 +19,7 @@
  */
 #include "advanced_config.h"
 #include "request_handlers.h"
+#include "model_config.h"
 
 /* Forward declaration for the module */
 module AP_MODULE_DECLARE_DATA muse_ai_module;
@@ -31,6 +32,7 @@ module AP_MODULE_DECLARE_DATA muse_ai_module;
  */
 static int muse_ai_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp, server_rec *s)
 {
+    apr_status_t rv;
     /* Suppress unused parameter warnings */
     (void)plog;
     (void)ptemp;
@@ -39,6 +41,22 @@ static int muse_ai_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *
     if (!cfg) {
         ap_log_error(APLOG_MARK, APLOG_ERR, 0, s, "[mod_muse_ai] FATAL: Could not retrieve server config in post_config. Module will not function.");
         return HTTP_INTERNAL_SERVER_ERROR;
+    }
+    
+    /* Initialize the model configuration system */
+    rv = init_model_config(pconf);
+    if (rv != APR_SUCCESS) {
+        ap_log_error(APLOG_MARK, APLOG_ERR, rv, s, "[mod_muse_ai] Failed to initialize model configuration system");
+        return HTTP_INTERNAL_SERVER_ERROR;
+    }
+    
+    /* Start the model configuration monitor thread */
+    rv = start_model_config_monitor(pconf);
+    if (rv != APR_SUCCESS) {
+        ap_log_error(APLOG_MARK, APLOG_WARNING, rv, s, "[mod_muse_ai] Failed to start model configuration monitor thread");
+        /* Continue anyway, we'll just have to manually reload Apache to pick up config changes */
+    } else {
+        ap_log_error(APLOG_MARK, APLOG_INFO, 0, s, "[mod_muse_ai] Model configuration monitor thread started successfully");
     }
 
     /* The main initialization logic is in request_handlers.c */
@@ -62,6 +80,7 @@ static void muse_ai_register_hooks(apr_pool_t *p)
      * - metrics_handler: Exposes Prometheus-compatible metrics at /metrics
      * - health_check_handler: Provides a system health check at /health
      */
+    /* Register the main AI handler under the standard name "muse-ai-handler" */
     ap_hook_handler(enhanced_muse_ai_handler, NULL, NULL, APR_HOOK_MIDDLE);
     ap_hook_handler(metrics_handler, NULL, NULL, APR_HOOK_MIDDLE);
     ap_hook_handler(health_check_handler, NULL, NULL, APR_HOOK_MIDDLE);

@@ -6,6 +6,7 @@
 #include "language_selection.h"
 #include "supported_locales.h"
 #include "error_pages.h"
+#include "model_config.h"
 #include <apr_time.h>
 #include "cJSON.h"
 #include "http_core.h"
@@ -629,13 +630,23 @@ int enhanced_muse_ai_handler(request_rec *r)
 
     char *response_body = NULL;
     
-    /* Create temporary basic config from advanced config */
+    /* Get model configuration from request environment or use default */
+    const muse_ai_model_config *model_cfg = get_request_model_config(r);
+    if (!model_cfg) {
+        ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r, "[mod_muse_ai] Failed to get model configuration");
+        return HTTP_INTERNAL_SERVER_ERROR;
+    }
+    
+    ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] Using model: %s, endpoint: %s", 
+                 model_cfg->name, model_cfg->endpoint);
+    
+    /* Create temporary basic config from advanced config and dynamic model config */
     muse_ai_config basic_cfg = {
-        .endpoint = cfg->endpoint,
+        .endpoint = model_cfg->endpoint, /* Use model-specific endpoint */
         .timeout = cfg->timeout,
         .debug = cfg->debug,
-        .model = cfg->model,
-        .api_key = cfg->api_key,
+        .model = model_cfg->model,    /* Use model-specific model identifier */
+        .api_key = model_cfg->api_key, /* Use model-specific API key */
         .streaming = cfg->streaming,
         .max_tokens = cfg->max_tokens
     };

@@ -333,6 +333,27 @@ The working simple proxy consists of:
 
 ### 🆕 **MAJOR ACHIEVEMENTS & STATUS UPDATE (2025-06-30)**
 
+#### 🔄 Dynamic Model Configuration System
+**Duration**: 2025-06-30 12:00 - 12:45 (45 minutes)
+**Status**: ✅ COMPLETED
+
+**Key Features Implemented**:
+- ✅ **Zero-Downtime Model Switching**: Change models without Apache restarts
+- ✅ **JSON Sidecar Configuration**: External models.json file for easy management
+- ✅ **Environment Variable Support**: Secure API key management via ${ENV_VAR} syntax
+- ✅ **Per-Request Model Selection**: Dynamic model selection via MuseAIModel environment variable
+- ✅ **Background Monitor Thread**: Automatic hot-reload when config file changes
+- ✅ **Thread-Safe Implementation**: Mutex-protected access to shared configuration
+- ✅ **Fallback to Default**: Graceful handling when requested model not found
+
+**Technical Implementation**:
+- ✅ Created simplified model configuration struct with essential fields
+- ✅ Implemented JSON parser for models.json using APR JSON APIs
+- ✅ Added background thread to monitor file changes (checks every 5 seconds)
+- ✅ Developed thread-safe model selection API with environment variable support
+- ✅ Integrated with request handlers for seamless model switching
+- ✅ Added comprehensive documentation in HOWTO.md
+
 #### 🚀 Enterprise-Ready API Key & Commercial Provider Support
 - **API Key Authentication**: `MuseAiApiKey` directive now enables secure Bearer token authentication for commercial AI providers (OpenAI, Google Gemini, Anthropic Claude, etc.)
 - **Dual-Mode**: Seamlessly works with both local (Ollama) and commercial cloud APIs
@@ -1199,4 +1220,42 @@ MuseAiApiKey your-actual-api-key-here
 
 ---
 
-*Last Updated: 2025-06-30 11:19*
+## 🔄 HANDLER CONSOLIDATION (2025-06-30 13:15)
+
+### Handler Consolidation and Standardization
+**Duration**: 2025-06-30 13:00-13:15 (15 minutes)
+**Status**: ✅ COMPLETED
+
+#### Changes Implemented
+
+1. **Handler Consolidation**:
+   - **Retired**: Old test handler (`muse-ai-handler` in `mod_muse_ai_test.c`)
+   - **Standardized**: Renamed the enhanced handler to be the standard handler
+   - **Removed**: `mod_muse_ai_test.c` file completely removed from codebase
+
+2. **Configuration Updates**:
+   - Updated all configuration examples to use the standard `muse-ai-handler` name
+   - Replaced all instances of `enhanced-muse-ai-handler` with `muse-ai-handler` in:
+     - HOWTO.md
+     - Quickguide.md
+     - Example configuration files
+
+3. **Documentation**:
+   - Updated README.md to mention the handler consolidation
+   - Updated all documentation to reflect the handler consolidation
+
+#### Technical Details
+
+- The function name in the C code (`enhanced_muse_ai_handler`) remains unchanged
+- Only the handler name used in Apache configuration (`SetHandler` directive) was standardized
+- The enhanced handler doesn't check for a specific handler name in its implementation
+- No code changes were needed in the handler function itself
+
+#### Benefits
+
+- **Simplified Architecture**: Single handler implementation makes the module easier to maintain
+- **Clearer Documentation**: Configuration examples now use a consistent handler name
+- **Reduced Confusion**: Eliminated the ambiguity between different handler implementations
+- **Streamlined Codebase**: Removed redundant test code that was no longer serving a purpose
+
+*Last Updated: 2025-06-30 13:15*
