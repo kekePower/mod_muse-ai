@@ -125,7 +125,9 @@ Add handler configuration for AI requests:
 ```apache
 # AI Request Handler
 <Location "/ai">
-    SetHandler muse-ai-handler
+    # Enable the AI module for this specific location
+    MuseAiEnable On
+    SetHandler enhanced-muse-ai-handler
     Require all granted
 </Location>
 ```
@@ -172,14 +174,61 @@ MuseAiSecurityMaxRequestSize 1048576
 
 ### Caching and Rate Limiting
 
-```apache
-# Caching Configuration
-MuseAiCacheEnable On
-MuseAiCacheTTL 300
+`mod_muse-ai` now includes a powerful, per-directory caching system that integrates with Apache's `mod_cache` and `mod_cache_socache` modules to significantly improve performance and reduce backend load.
 
-# Rate Limiting
-MuseAiRateLimitEnable On
-MuseAiRateLimitRPM 120
+#### Prerequisites for Caching
+
+Before enabling caching in `mod_muse-ai`, you must ensure that `mod_cache` and `mod_cache_socache` are loaded in your main Apache configuration (`httpd.conf` or `apache2.conf`):
+
+```apache
+LoadModule cache_module modules/mod_cache.so
+LoadModule cache_socache_module modules/mod_cache_socache.so
+```
+
+#### Caching Configuration
+
+You can control caching behavior on a per-directory or per-location basis. This allows you to fine-tune caching strategies for different parts of your website.
+
+**Directives:**
+
+- `MuseAiCacheEnable On|Off`: Enables or disables caching for a specific directory or location. Default is `Off`.
+- `MuseAiCacheTTL seconds`: Sets the cache Time-To-Live (TTL) in seconds. This determines how long a cached response is considered fresh. The default is `300` seconds (5 minutes).
+
+**Example Configuration:**
+
+This example demonstrates how to enable caching for a specific documentation section of a website, with a longer TTL for less frequently updated content.
+
+```apache
+# Global cache settings (can be overridden per-directory)
+CacheSocache shmcb:muse-ai-cache(512000) # 500KB shared memory cache
+
+<Location "/docs/">
+    # Enable mod_muse-ai caching for this location
+    MuseAiCacheEnable On
+    MuseAiCacheTTL 3600 # Cache documents for 1 hour
+
+    # Instruct mod_cache to use the socache provider for this location
+    CacheEnable socache
+</Location>
+
+<Location "/blog/">
+    # Enable caching for the blog with a shorter TTL
+    MuseAiCacheEnable On
+    MuseAiCacheTTL 600 # Cache blog posts for 10 minutes
+    CacheEnable socache
+</Location>
+```
+
+> **Note**: Caching is automatically disabled for requests where `MuseAiStreaming` is `On`, as caching is not compatible with streaming responses.
+
+#### Rate Limiting (Phase 3 - In Development)
+
+The following directives are planned for a future release and are not yet functional:
+
+```apache
+# Rate Limiting (Not yet implemented)
+# MuseAiRateLimitEnable On
+# MuseAiRateLimitRPM 120
 ```
 
 ### Monitoring and Metrics
