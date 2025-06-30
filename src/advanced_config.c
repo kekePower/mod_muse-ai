@@ -1,40 +1,68 @@
 #include "advanced_config.h"
 #include <apr_strings.h>
 #include <http_log.h>
+#include <apr_env.h> /* For apr_env_get */
 
-/* Create advanced configuration structure - MINIMAL VERSION FOR DEBUGGING */
+/* Create advanced configuration structure, prioritizing environment variables */
 void *create_advanced_muse_ai_config(apr_pool_t *pool, server_rec *s)
 {
     advanced_muse_ai_config *cfg;
-    
+    char *env_val = NULL;
+
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s, 
-                "[mod_muse_ai] Creating MINIMAL configuration for debugging");
-    
+                 "[mod_muse_ai] Creating advanced server configuration");
+
     cfg = apr_pcalloc(pool, sizeof(advanced_muse_ai_config));
     if (!cfg) {
         ap_log_error(APLOG_MARK, APLOG_ERR, 0, s, 
-                    "[mod_muse_ai] Failed to allocate configuration");
+                     "[mod_muse_ai] Failed to allocate memory for server configuration");
         return NULL;
     }
-    
-    /* Initialize ONLY the most basic fields */
-    cfg->endpoint = "http://127.0.0.1:8080/v1";
-    cfg->api_key = NULL;
+
+    /* Initialize configuration with defaults, prioritizing environment variables */
+
+    /* Endpoint: Check MUSE_AI_ENDPOINT environment variable */
+    if (apr_env_get(&env_val, "MUSE_AI_ENDPOINT", pool) == APR_SUCCESS && env_val) {
+        cfg->endpoint = apr_pstrdup(pool, env_val);
+        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s, 
+                     "[mod_muse_ai] MuseAiEndpoint loaded from environment variable: %s", cfg->endpoint);
+    } else {
+        cfg->endpoint = "http://127.0.0.1:8080/v1"; /* Default fallback */
+        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s, 
+                     "[mod_muse_ai] MuseAiEndpoint using default value: %s", cfg->endpoint);
+    }
+
+    /* API Key: Check MUSE_AI_API_KEY environment variable */
+    if (apr_env_get(&env_val, "MUSE_AI_API_KEY", pool) == APR_SUCCESS && env_val) {
+        cfg->api_key = apr_pstrdup(pool, env_val);
+        /* Do NOT log the API key itself for security reasons */
+        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s, 
+                     "[mod_muse_ai] MuseAiApiKey loaded from environment variable.");
+    } else {
+        cfg->api_key = NULL; /* Default to NULL if not set */
+        ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s, 
+                     "[mod_muse_ai] MuseAiApiKey not set in environment.");
+    }
+
+    /* Initialize other fields with safe defaults */
     cfg->model = "test-model";
     cfg->timeout = 300;
     cfg->debug = 0;
     cfg->streaming = 1;
-    cfg->max_tokens = 16384;  /* Default to 16k tokens */
-    
-    /* Set all other pointers to NULL to avoid crashes */
+    cfg->max_tokens = 16384;
+
+    cfg->cache_enable = 0; /* Caching disabled by default */
+    cfg->cache_ttl_seconds = 300; /* Default 5 minutes */
+
+    /* Set all other pointers to NULL to avoid crashes during initialization */
     cfg->reasoning_model_patterns = NULL;
     cfg->backend_endpoints = NULL;
-    cfg->prompts_dir = NULL;  /* Will be set by directive handler */
+    cfg->prompts_dir = NULL;
     cfg->ratelimit_whitelist_ips = NULL;
-    
+
     ap_log_error(APLOG_MARK, APLOG_DEBUG, 0, s, 
-                "[mod_muse_ai] Minimal configuration created successfully");
-    
+                 "[mod_muse_ai] Advanced server configuration created successfully");
+
     return cfg;
 }
 
@@ -59,6 +87,10 @@ void *merge_advanced_muse_ai_config(apr_pool_t *p, void *base_conf, void *new_co
                 base->timeout, new->timeout, merged->timeout);
     merged->debug = new->debug;
     merged->streaming = new->streaming;
+
+    // Caching settings - new scope overrides base
+    merged->cache_enable = new->cache_enable;
+    merged->cache_ttl_seconds = new->cache_ttl_seconds;
 
     // Set all complex fields to NULL to avoid crashes, but preserve prompts_dir
     merged->reasoning_model_patterns = NULL;
@@ -103,18 +135,16 @@ const char *set_cache_enable(cmd_parms *cmd, void *cfg, const char *arg)
     return NULL;
 }
 
-const char *set_cache_ttl(cmd_parms *cmd, void *cfg, const char *arg)
+const char *set_cache_ttl(cmd_parms *cmd, void *mconfig, const char *arg)
 {
-    (void)cfg;
-    extern module muse_ai_module;
-    advanced_muse_ai_config *config = (advanced_muse_ai_config *)ap_get_module_config(cmd->server->module_config, &muse_ai_module);
-    int value = atoi(arg);
-    
-    if (value < 60 || value > 86400) {
-        return "MuseAiCacheTTL must be between 60 and 86400 seconds";
+    muse_ai_dir_config *d_cfg = (muse_ai_dir_config *)mconfig;
+    int ttl = atoi(arg);
+
+    if (ttl < 0) {
+        return "MuseAiCacheTTL must be a non-negative integer (0 to disable).";
     }
     
-    config->cache_ttl_seconds = value;
+    d_cfg->cache_ttl = ttl;
     return NULL;
 }
 
@@ -393,6 +423,41 @@ const char *set_muse_ai_max_tokens(cmd_parms *cmd, void *dcfg, const char *arg)
     return NULL;
 }
 
+/* Create a new per-directory configuration */
+void *create_muse_ai_dir_config(apr_pool_t *p, char *dir) {
+    muse_ai_dir_config *dcfg = apr_pcalloc(p, sizeof(muse_ai_dir_config));
+    dcfg->enabled = -1; /* -1 indicates not set */
+    dcfg->cache_enable = -1;
+    dcfg->cache_ttl = -1;
+    return dcfg;
+}
+
+/* Merge per-directory configurations */
+void *merge_muse_ai_dir_config(apr_pool_t *p, void *base_conf, void *new_conf) {
+    muse_ai_dir_config *merged = apr_pcalloc(p, sizeof(muse_ai_dir_config));
+    muse_ai_dir_config *base = (muse_ai_dir_config *)base_conf;
+    muse_ai_dir_config *new = (muse_ai_dir_config *)new_conf;
+
+    merged->enabled = (new->enabled != -1) ? new->enabled : base->enabled;
+    merged->cache_enable = (new->cache_enable != -1) ? new->cache_enable : base->cache_enable;
+    merged->cache_ttl = (new->cache_ttl != -1) ? new->cache_ttl : base->cache_ttl;
+
+    return merged;
+}
+
+/* Handler for the MuseAiEnable directive */
+const char *set_muse_ai_enable(cmd_parms *cmd, void *cfg, const char *arg) {
+    muse_ai_dir_config *dcfg = (muse_ai_dir_config *)cfg;
+    if (strcasecmp(arg, "On") == 0) {
+        dcfg->enabled = 1;
+    } else if (strcasecmp(arg, "Off") == 0) {
+        dcfg->enabled = 0;
+    } else {
+        return "MuseAiEnable must be 'On' or 'Off'.";
+    }
+    return NULL;
+}
+
 const command_rec muse_ai_advanced_cmds[] = {
     AP_INIT_TAKE1("MuseAiEndpoint", set_muse_ai_endpoint, NULL, RSRC_CONF, "The endpoint URL for the MuseWeb AI service"),
     AP_INIT_TAKE1("MuseAiApiKey", set_muse_ai_api_key, NULL, RSRC_CONF, "The API key for commercial AI providers"),
@@ -401,8 +466,8 @@ const command_rec muse_ai_advanced_cmds[] = {
     AP_INIT_TAKE1("MuseAiDebug", set_muse_ai_debug, NULL, RSRC_CONF, "Enable debug logging (On/Off)"),
     AP_INIT_TAKE1("MuseAiStreaming", set_muse_ai_streaming, NULL, RSRC_CONF, "Enable streaming responses (On/Off)"),
     AP_INIT_TAKE1("MuseAiPoolMaxConnections", set_pool_max_connections, NULL, RSRC_CONF, "Maximum number of connections in the pool"),
-    AP_INIT_TAKE1("MuseAiCacheEnable", set_cache_enable, NULL, RSRC_CONF, "Enable response caching (On/Off)"),
-    AP_INIT_TAKE1("MuseAiCacheTTL", set_cache_ttl, NULL, RSRC_CONF, "Cache time-to-live in seconds"),
+    AP_INIT_TAKE1("MuseAiCacheEnable", set_cache_enable, NULL, OR_ALL, "Enable or disable response caching for a directory (On/Off)"),
+    AP_INIT_TAKE1("MuseAiCacheTTL", set_cache_ttl, NULL, OR_ALL, "Set cache time-to-live in seconds for a directory (0 to disable)"),
     AP_INIT_TAKE1("MuseAiRateLimitEnable", set_ratelimit_enable, NULL, RSRC_CONF, "Enable rate limiting (On/Off)"),
     AP_INIT_TAKE1("MuseAiRateLimitRPM", set_ratelimit_rpm, NULL, RSRC_CONF, "Rate limit in requests per minute"),
     AP_INIT_TAKE1("MuseAiMetricsEnable", set_metrics_enable, NULL, RSRC_CONF, "Enable performance metrics (On/Off)"),
@@ -413,7 +478,8 @@ const command_rec muse_ai_advanced_cmds[] = {
     AP_INIT_TAKE1("MuseAiSecurityMaxRequestSize", set_security_max_request_size, NULL, RSRC_CONF, "Maximum allowed request body size in bytes"),
     AP_INIT_TAKE1("MuseAiPromptsDir", set_muse_ai_prompts_dir, NULL, RSRC_CONF, "Directory for prompt files"),
     AP_INIT_TAKE1("MuseAiPromptsMinify", set_muse_ai_prompts_minify, NULL, RSRC_CONF, "Enable minified layout for prompts (On/Off)"),
-    AP_INIT_TAKE1("MuseAiMaxTokens", set_muse_ai_max_tokens, NULL, RSRC_CONF, "Maximum number of tokens for AI response generation (0 = no limit)"),
+    AP_INIT_TAKE1("MuseAiMaxTokens", set_muse_ai_max_tokens, NULL, RSRC_CONF, "Set the maximum number of tokens for the AI response (0 = no limit)"),
+    AP_INIT_TAKE1("MuseAiEnable", set_muse_ai_enable, NULL, OR_ALL, "Enable or disable mod_muse_ai for a directory"),
     {NULL}
 };
 

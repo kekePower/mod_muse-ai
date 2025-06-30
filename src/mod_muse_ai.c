@@ -84,8 +84,8 @@ static void muse_ai_register_hooks(apr_pool_t *p)
  */
 module AP_MODULE_DECLARE_DATA muse_ai_module = {
     STANDARD20_MODULE_STUFF,
-    NULL,                           /* create per-dir config */
-    NULL,                           /* merge per-dir config */
+    create_muse_ai_dir_config,      /* create per-dir config */
+    merge_muse_ai_dir_config,       /* merge per-dir config */
     create_advanced_muse_ai_config, /* create per-server config */
     merge_advanced_muse_ai_config,  /* merge per-server config */
     muse_ai_advanced_cmds,          /* command table */

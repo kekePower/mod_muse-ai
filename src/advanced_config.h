@@ -6,6 +6,13 @@
 #include <apr_pools.h>
 #include <apr_tables.h>
 
+/* Per-directory configuration structure */
+typedef struct {
+    int enabled;        /* Tri-state: -1=unset, 0=Off, 1=On */
+    int cache_enable;   /* Tri-state: -1=unset, 0=Off, 1=On */
+    int cache_ttl;      /* Tri-state: -1=unset, 0=Off, >0=TTL in seconds */
+} muse_ai_dir_config;
+
 /* Advanced configuration structure extending the basic muse_ai_config */
 typedef struct advanced_muse_ai_config {
     /* Basic configuration (inherited) */
@@ -118,6 +125,8 @@ typedef struct muse_ai_metrics {
 
 /* Function declarations */
 void *create_advanced_muse_ai_config(apr_pool_t *pool, server_rec *s);
+void *create_muse_ai_dir_config(apr_pool_t *p, char *dir);
+void *merge_muse_ai_dir_config(apr_pool_t *p, void *base_conf, void *new_conf);
 void *merge_advanced_muse_ai_config(apr_pool_t *p, void *base_conf, void *new_conf);
 extern const command_rec muse_ai_advanced_cmds[];
 const char *set_pool_max_connections(cmd_parms *cmd, void *cfg, const char *arg);
@@ -134,6 +143,7 @@ const char *set_security_max_request_size(cmd_parms *cmd, void *cfg, const char 
 const char *set_muse_ai_prompts_dir(cmd_parms *cmd, void *cfg, const char *arg);
 const char *set_muse_ai_prompts_minify(cmd_parms *cmd, void *cfg, const char *arg);
 const char *set_muse_ai_max_tokens(cmd_parms *cmd, void *cfg, const char *arg);
+const char *set_muse_ai_enable(cmd_parms *cmd, void *cfg, const char *arg);
 
 /* Metrics functions */
 muse_ai_metrics_t *get_global_metrics(void);
