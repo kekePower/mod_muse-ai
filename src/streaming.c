@@ -71,7 +71,8 @@ int find_html_end(const char *content)
 
 /* Process streaming content using MuseWeb's smart streaming approach */
 char *process_streaming_content(request_rec *r, streaming_state_t *state, 
-                               const char *new_content)
+                               const char *new_content, 
+                               const muse_language_selection_t *lang_selection)
 {
     if (!new_content || !state) {
         return apr_pstrdup(r->pool, "");
@@ -96,7 +97,7 @@ char *process_streaming_content(request_rec *r, streaming_state_t *state,
         /* Start streaming if we've buffered for enough time OR if we have substantial content */
         if (elapsed >= buffer_duration || buffer_len > 1000) {
             /* Apply comprehensive sanitization to the buffered content before streaming */
-            char *fully_sanitized = cleanup_code_fences(r->pool, state->pending_buffer);
+            char *fully_sanitized = sanitize_response(r->pool, state->pending_buffer, lang_selection);
             state->pending_buffer = fully_sanitized;
             
             /* Start streaming the sanitized content */

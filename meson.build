@@ -68,11 +68,11 @@ run_target('install-module',
 
 # Development targets
 run_target('apache-restart',
-  command : ['sudo', 'systemctl', 'restart', 'apache2']
+  command : ['sudo', 'systemctl', 'restart', 'httpd']
 )
 
 run_target('apache-reload',
-  command : ['sudo', 'systemctl', 'reload', 'apache2']
+  command : ['sudo', 'systemctl', 'reload', 'httpd']
 )
 
 run_target('test-module',

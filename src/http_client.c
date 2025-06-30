@@ -150,7 +150,8 @@ static char *extract_json_content(apr_pool_t *pool, const char *json_data)
 
 /* Handle streaming response from backend */
 static int handle_streaming_response(request_rec *r, muse_ai_config *cfg, 
-                                   apr_socket_t *sock, streaming_state_t *state)
+                                   apr_socket_t *sock, streaming_state_t *state, 
+                                   const muse_language_selection_t *lang_selection)
 {
     /* Calculate dynamic buffer sizes based on max_tokens */
     size_t buffer_size = calculate_buffer_size(cfg->max_tokens);
@@ -289,7 +290,7 @@ static int handle_streaming_response(request_rec *r, muse_ai_config *cfg,
                 
                 if (content && strlen(content) > 0) {
                     /* Process through streaming pipeline */
-                    char *processed_content = process_streaming_content(r, state, content);
+                    char *processed_content = process_streaming_content(r, state, content, lang_selection);
                     
                     if (processed_content && strlen(processed_content) > 0) {
                         /* Send processed content to client */
@@ -335,7 +336,7 @@ static int handle_streaming_response(request_rec *r, muse_ai_config *cfg,
 /* Make HTTP POST request to backend API with streaming support */
 int make_backend_request(request_rec *r, muse_ai_config *cfg, 
                         const char *backend_url, const char *json_payload,
-                        char **response_body)
+                        char **response_body, const muse_language_selection_t *lang_selection)
 {
     apr_socket_t *sock;
     apr_sockaddr_t *sa;
@@ -481,7 +482,7 @@ int make_backend_request(request_rec *r, muse_ai_config *cfg,
         streaming_state_t *state = create_streaming_state(r->pool);
         
         /* Handle streaming response */
-        int result = handle_streaming_response(r, cfg, sock, state);
+        int result = handle_streaming_response(r, cfg, sock, state, lang_selection);
         apr_socket_close(sock);
         return result;
     } else {

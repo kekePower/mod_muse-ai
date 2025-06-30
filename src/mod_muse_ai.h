@@ -10,6 +10,7 @@
 #include "apr_network_io.h"
 #include "apr_file_io.h"
 #include "apr_uri.h"
+#include "language_selection.h"
 
 /* Module configuration structure */
 typedef struct {
@@ -54,19 +55,20 @@ const char *set_muse_ai_streaming(cmd_parms *cmd, void *cfg, int flag);
 /* HTTP client functions */
 int make_backend_request(request_rec *r, muse_ai_config *cfg, 
                         const char *backend_url, const char *json_payload,
-                        char **response_body);
+                        char **response_body, const muse_language_selection_t *lang_selection);
 
 /* Streaming functions */
 streaming_state_t *create_streaming_state(apr_pool_t *pool);
 void reset_streaming_state(streaming_state_t *state);
 char *process_streaming_content(request_rec *r, streaming_state_t *state, 
-                               const char *new_content);
+                               const char *new_content, 
+                               const muse_language_selection_t *lang_selection);
 int find_html_start(const char *content);
 int find_html_end(const char *content);
 
 /* Sanitization functions */
 char *cleanup_code_fences(apr_pool_t *pool, const char *content);
-char *sanitize_response(apr_pool_t *pool, const char *content);
+char *sanitize_response(apr_pool_t *pool, const char *content, const muse_language_selection_t *lang_selection);
 char *extract_html_content(apr_pool_t *pool, const char *content);
 
 /* Utility functions */

@@ -16,110 +16,146 @@
 static const char *parse_accept_language(const char *accept_lang, apr_pool_t *pool);
 static bool is_valid_language_code(const char *code);
 static const char *extract_cookie_value(const char *cookie_header, const char *cookie_name, apr_pool_t *pool);
+static const char* detect_from_url_or_query(request_rec *r, muse_language_selection_t *result);
 
-muse_language_selection_t *muse_detect_language(request_rec *r, const char *fallback_locale)
+static const char* detect_from_url_or_query(request_rec *r, muse_language_selection_t *result)
 {
-    muse_language_selection_t *result;
     char lang_buffer[8];
     char remaining_uri[512];
     const char *detected_lang = NULL;
-    const char *source = "fallback";
-    bool is_translation_requested = false;
-    
-    if (!r || !fallback_locale) {
-        return NULL;
-    }
-    
-    /* Allocate result structure */
-    result = apr_pcalloc(r->pool, sizeof(muse_language_selection_t));
-    result->original_uri = r->uri;
-    result->processed_uri = r->uri;
-    
+
     /* Priority 1: URL prefix (/es/page, /fr/document) */
     if (muse_extract_language_from_url(r->uri, lang_buffer, sizeof(lang_buffer),
                                       remaining_uri, sizeof(remaining_uri))) {
         detected_lang = apr_pstrdup(r->pool, lang_buffer);
         result->processed_uri = apr_pstrdup(r->pool, remaining_uri);
-        source = "url";
-        is_translation_requested = true;
-        
+        result->source = "url";
         ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
                      "[language_selection] Language from URL: %s (remaining: %s)",
-                     detected_lang, remaining_uri);
+                     detected_lang, result->processed_uri);
     }
-    
+
     /* Priority 2: Query parameter (?lang=es, ?locale=fr_FR) */
     if (!detected_lang) {
         detected_lang = muse_get_language_from_query(r);
         if (detected_lang) {
-            source = "query";
-            is_translation_requested = true;
-            
+            result->source = "query";
             ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
                          "[language_selection] Language from query: %s", detected_lang);
         }
     }
     
-    /* Priority 3: Cookie (language=es) */
-    if (!detected_lang) {
+    return detected_lang;
+}
+
+muse_language_selection_t *muse_detect_language(request_rec *r, const char *fallback_locale)
+{
+    muse_language_selection_t *result;
+    char lang_buffer[8];
+    const char *detected_lang = NULL;
+    const char *source = "fallback";
+    bool is_translation_requested = false;
+
+    if (!r || !fallback_locale) {
+        return NULL;
+    }
+
+    /* Allocate result structure */
+    result = apr_pcalloc(r->pool, sizeof(muse_language_selection_t));
+    result->original_uri = r->uri;
+    result->processed_uri = r->uri;
+
+    /*
+     * MAJOR LOGIC REFACTOR: The order of language detection is critical.
+     * An explicit language in the URL (prefix or query param) ALWAYS wins.
+     * If a language is specified in the URL, we use it and update the user's cookie.
+     * If not, we then check for a cookie, then headers, then use the fallback.
+     * This fixes the bug where a stale cookie could override a URL choice.
+     */
+
+    /* Step 1: Check for explicit language in URL (prefix or query) */
+    detected_lang = detect_from_url_or_query(r, result);
+
+    if (detected_lang) {
+        /* Language was explicitly requested. This is the winner. */
+        is_translation_requested = true;
+        source = result->source; /* "url" or "query" */
+        
+        /* We have a definitive language, set the cookie for future requests */
+        const char* normalized_for_cookie = muse_normalize_language_to_locale(detected_lang, r->pool);
+        if (normalized_for_cookie) {
+            muse_set_language_cookie(r, normalized_for_cookie, 31536000); /* 1 year */
+            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                         "[language_selection] Set language cookie to '%s' from URL", normalized_for_cookie);
+        }
+
+    } else {
+        /* Step 2: No explicit language in URL, check for implicit preferences */
+        is_translation_requested = false; /* This is a preference, not a direct request */
+
+        /* Priority 3: Cookie (language=es) */
         detected_lang = muse_get_language_from_cookie(r);
         if (detected_lang) {
             source = "cookie";
-            is_translation_requested = true;
-            
             ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
                          "[language_selection] Language from cookie: %s", detected_lang);
         }
-    }
-    
-    /* Priority 4: Accept-Language header */
-    if (!detected_lang) {
-        detected_lang = muse_get_language_from_header(r);
-        if (detected_lang) {
-            source = "header";
-            is_translation_requested = false; // Implicit preference, not explicit request
-            
-            ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
-                         "[language_selection] Language from header: %s", detected_lang);
+
+        /* Priority 4: Accept-Language header */
+        if (!detected_lang) {
+            detected_lang = muse_get_language_from_header(r);
+            if (detected_lang) {
+                source = "header";
+                ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
+                             "[language_selection] Language from header: %s", detected_lang);
+            }
         }
     }
-    
-    /* Priority 5: Fallback */
+
+    /* Step 3: Fallback if no language was detected */
     if (!detected_lang) {
         detected_lang = fallback_locale;
         source = "fallback";
         is_translation_requested = false;
-        
         ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r,
                      "[language_selection] Using fallback language: %s", detected_lang);
     }
-    
-    /* Normalize to full locale and validate */
+
+    /* Step 4: Normalize to full locale and validate */
     result->selected_locale = muse_normalize_language_to_locale(detected_lang, r->pool);
     if (!result->selected_locale) {
-        /* If normalization failed, try fallback */
+        /* If normalization failed, revert to fallback */
+        ap_log_rerror(APLOG_MARK, APLOG_WARNING, 0, r,
+                     "[language_selection] Normalization failed for '%s'. Reverting to fallback '%s'.",
+                     detected_lang, fallback_locale);
         result->selected_locale = muse_normalize_language_to_locale(fallback_locale, r->pool);
         source = "fallback";
         is_translation_requested = false;
     }
-    
-    /* Extract language code */
+
+    /* Extract short language code from the final locale */
     if (result->selected_locale && muse_extract_language_code(result->selected_locale, lang_buffer, sizeof(lang_buffer))) {
         result->language_code = apr_pstrdup(r->pool, lang_buffer);
     } else {
+        /* Fallback to the detected code if extraction fails */
         result->language_code = detected_lang;
     }
-    
+
     /* Set final properties */
-    result->source = apr_pstrdup(r->pool, source);
+    result->source = source;
     result->is_translation_requested = is_translation_requested;
     result->is_supported = result->selected_locale ? muse_is_locale_supported(result->selected_locale) : false;
-    
+    result->is_rtl = (result->language_code && 
+                      (strcmp(result->language_code, "ar") == 0 || 
+                       strcmp(result->language_code, "fa") == 0 || 
+                       strcmp(result->language_code, "he") == 0));
+
     ap_log_rerror(APLOG_MARK, APLOG_INFO, 0, r,
-                 "[language_selection] Final selection: locale=%s, source=%s, supported=%s, translation_requested=%s",
+                 "[language_selection] Final selection: locale=%s, source=%s, supported=%s, rtl=%s, translation_requested=%s",
                  result->selected_locale ? result->selected_locale : "NULL",
                  result->source,
                  result->is_supported ? "yes" : "no",
+                 result->is_rtl ? "yes" : "no",
                  result->is_translation_requested ? "yes" : "no");
     
     return result;

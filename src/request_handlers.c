@@ -101,9 +101,12 @@ int ai_file_handler(request_rec *r)
     if (r->method_number != M_GET) {
         return HTTP_METHOD_NOT_ALLOWED;
     }
-    
-    /* Get configuration */
+
+    /* Get server and directory configurations */
     cfg = (advanced_muse_ai_config *)ap_get_module_config(r->server->module_config, &muse_ai_module);
+    muse_ai_dir_config *d_cfg = (muse_ai_dir_config *)ap_get_module_config(r->per_dir_config, &muse_ai_module);
+
+
     if (!cfg) {
         ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r, "[mod_muse_ai] Failed to get configuration");
         return HTTP_INTERNAL_SERVER_ERROR;
@@ -186,6 +189,8 @@ int ai_file_handler(request_rec *r)
         }
     }
     
+
+
     /* Create JSON payload with translation support */
     if (final_system_prompt) {
         /* Both system and user content */
@@ -327,14 +332,48 @@ int ai_file_handler(request_rec *r)
     
     /* Forward to backend */
     char *response_body = NULL;
-    int status = make_backend_request(r, &basic_cfg, cfg->endpoint, json_payload, &response_body);
-    
+    int status = make_backend_request(r, &basic_cfg, cfg->endpoint, json_payload, &response_body, lang_selection);
+
+    if (status == OK) {
+        /* If caching is enabled for this directory (and not streaming), set Cache-Control header */
+        if (d_cfg->cache_enable == 1 && !cfg->streaming) {
+            int cache_ttl = (d_cfg->cache_ttl > 0) ? d_cfg->cache_ttl : cfg->cache_ttl_seconds;
+            const char *cache_control_header = apr_psprintf(r->pool, "max-age=%d", cache_ttl);
+            apr_table_set(r->headers_out, "Cache-Control", cache_control_header);
+            ap_log_rerror(APLOG_MARK, APLOG_NOTICE, 0, r, "[mod_muse_ai] Caching enabled. Setting Cache-Control: %s", cache_control_header);
+        }
+
+        if (!cfg->streaming) {
+            if (response_body) {
+                apr_bucket_brigade *bb = apr_brigade_create(r->pool, r->connection->bucket_alloc);
+                apr_bucket *b = apr_bucket_heap_create(response_body, strlen(response_body), NULL, r->connection->bucket_alloc);
+                APR_BRIGADE_INSERT_TAIL(bb, b);
+                APR_BRIGADE_INSERT_TAIL(bb, apr_bucket_eos_create(r->connection->bucket_alloc));
+                return ap_pass_brigade(r->output_filters, bb);
+            } else {
+                 ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r, "[mod_muse_ai] Backend returned OK but response body was empty in non-streaming mode.");
+                 return HTTP_INTERNAL_SERVER_ERROR;
+            }
+        } else {
+            /* Streaming response is handled inside make_backend_request */
+            return OK;
+        }
+    }
+
     return status;
 }
 
 /* Enhanced request handler with Phase 3 features */
 int enhanced_muse_ai_handler(request_rec *r)
 {
+    muse_ai_dir_config *dcfg = (muse_ai_dir_config *)ap_get_module_config(r->per_dir_config, &muse_ai_module);
+
+    /* If the module is not explicitly enabled for this directory, decline. */
+    /* The default state is disabled. It must be set to 'On' to be active. */
+    if (!dcfg || dcfg->enabled != 1) {
+        return DECLINED;
+    }
+
     /* Check if this is a .ai file request */
     if (r->uri && strlen(r->uri) > 3 && strcmp(r->uri + strlen(r->uri) - 3, ".ai") == 0) {
         ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] Detected .ai file request, routing to ai_file_handler");
@@ -416,6 +455,9 @@ int enhanced_muse_ai_handler(request_rec *r)
         ap_log_rerror(APLOG_MARK, APLOG_ERR, 0, r, "[mod_muse_ai] Failed to get advanced configuration");
         return HTTP_INTERNAL_SERVER_ERROR;
     }
+
+    /* Detect language for RTL support */
+    muse_language_selection_t *lang_selection = muse_detect_language(r, "en_US");
 
     ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] HANDLER USING ENDPOINT: %s", cfg->endpoint ? cfg->endpoint : "(not set)");
     ap_log_rerror(APLOG_MARK, APLOG_DEBUG, 0, r, "[mod_muse_ai] HANDLER CONFIG: timeout=%d, debug=%d, api_key=%s", 
@@ -603,7 +645,7 @@ int enhanced_muse_ai_handler(request_rec *r)
                      basic_cfg.timeout, basic_cfg.debug);
     }
     
-    int status = make_backend_request(r, &basic_cfg, cfg->endpoint, json_payload, &response_body);
+    int status = make_backend_request(r, &basic_cfg, cfg->endpoint, json_payload, &response_body, lang_selection);
     
     /* Calculate response time */
     end_time = apr_time_now();

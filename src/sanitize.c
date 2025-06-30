@@ -302,7 +302,7 @@ char *extract_html_content(apr_pool_t *pool, const char *content)
 }
 
 /* Enhanced sanitize response using MuseWeb's proven approach */
-char *sanitize_response(apr_pool_t *pool, const char *content)
+char *sanitize_response(apr_pool_t *pool, const char *content, const muse_language_selection_t *lang_selection)
 {
     if (!content) return apr_pstrdup(pool, "");
     
@@ -386,7 +386,24 @@ char *sanitize_response(apr_pool_t *pool, const char *content)
         cleaned = str_replace_all(pool, cleaned, "\n\n\n", "\n\n");
     }
     
-    /* Step 8: Final trim */
+    /* Step 8: Add dir="rtl" for RTL languages */
+    if (lang_selection && lang_selection->is_rtl) {
+        char *html_tag = str_case_str(cleaned, "<html");
+        if (html_tag) {
+            char *tag_end = strchr(html_tag, '>');
+            if (tag_end) {
+                char *existing_dir = str_case_str(html_tag, "dir=");
+                if (!existing_dir || existing_dir > tag_end) {
+                    /* No dir attribute, add it */
+                    char *before = apr_pstrndup(pool, cleaned, html_tag - cleaned + 5); // up to "<html"
+                    char *after = apr_pstrdup(pool, html_tag + 5);
+                    cleaned = apr_pstrcat(pool, before, " dir=\"rtl\"", after, NULL);
+                }
+            }
+        }
+    }
+
+    /* Step 9: Final trim */
     cleaned = trim_whitespace(pool, cleaned);
     
     return cleaned;

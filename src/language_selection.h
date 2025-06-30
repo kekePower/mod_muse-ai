@@ -28,6 +28,7 @@ typedef struct {
     const char *source;              /**< Source of language selection (url/query/cookie/header/fallback) */
     bool is_translation_requested;   /**< Whether translation was explicitly requested */
     bool is_supported;               /**< Whether the selected locale is supported */
+    bool is_rtl;                     /**< Whether the selected language is right-to-left */
 } muse_language_selection_t;
 
 /**
